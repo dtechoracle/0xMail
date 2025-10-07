@@ -1,0 +1,238 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  emailAccounts EmailAccount[]
+  emails        Email[]
+  quarantined   QuarantinedEmail[]
+  settings      UserSettings?
+  reports       SecurityReport[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model EmailAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  provider      String   // "gmail", "outlook", "custom"
+  email         String
+  accessToken   String?
+  refreshToken  String?
+  tokenExpiry   DateTime?
+  isActive      Boolean  @default(true)
+  lastSyncedAt  DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emails Email[]
+
+  @@unique([userId, email])
+}
+
+model Email {
+  id               String    @id @default(cuid())
+  userId           String
+  emailAccountId   String
+  messageId        String    @unique
+  threadId         String?
+  subject          String
+  from             String
+  to               String
+  cc               String?
+  bcc              String?
+  body             String
+  htmlBody         String?
+  receivedAt       DateTime
+  isRead           Boolean   @default(false)
+  isStarred        Boolean   @default(false)
+  labels           String?   // JSON array of labels
+  attachments      String?   // JSON array of attachments
+  
+  // Threat Analysis
+  threatScore      Int       @default(0) // 0-100
+  threatLevel      String    @default("safe") // "safe", "suspicious", "malicious"
+  threatFlags      String?   // JSON array of threat indicators
+  scanStatus       String    @default("pending") // "pending", "scanning", "completed"
+  scannedAt        DateTime?
+  
+  // Email Authentication
+  spfResult        String?   // "pass", "fail", "neutral"
+  dkimResult       String?   // "pass", "fail"
+  dmarcResult      String?   // "pass", "fail"
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailAccount EmailAccount     @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  quarantine   QuarantinedEmail?
+  analysis     ThreatAnalysis?
+}
+
+model QuarantinedEmail {
+  id              String   @id @default(cuid())
+  emailId         String   @unique
+  userId          String
+  reason          String   // JSON array of reasons
+  quarantinedAt   DateTime @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  action          String?  // "released", "deleted", "blocked_sender"
+  
+  email Email @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ThreatAnalysis {
+  id                    String   @id @default(cuid())
+  emailId               String   @unique
+  
+  // Link Analysis
+  totalLinks            Int      @default(0)
+  suspiciousLinks       Int      @default(0)
+  phishingLinks         Int      @default(0)
+  maliciousUrls         String?  // JSON array
+  
+  // Content Analysis
+  hasUrgentLanguage     Boolean  @default(false)
+  hasCredentialRequest  Boolean  @default(false)
+  hasSpoofedDomain      Boolean  @default(false)
+  hasSuspiciousAttachment Boolean @default(false)
+  
+  // Sender Analysis
+  senderTrustScore      Int      @default(50) // 0-100
+  senderDomainAge       Int?     // in days
+  previousEmailCount    Int      @default(0)
+  reportedPhishingCount Int      @default(0)
+  
+  // AI Analysis
+  aiConfidenceScore     Float?   // 0.0-1.0
+  aiPrediction          String?  // "safe", "suspicious", "malicious"
+  aiReasoningFlags      String?  // JSON array
+  
+  analyzedAt            DateTime @default(now())
+  
+  email Email @relation(fields: [emailId], references: [id], onDelete: Cascade)
+}
+
+model UserSettings {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  
+  // Notification Preferences
+  emailNotifications    Boolean  @default(true)
+  pushNotifications     Boolean  @default(false)
+  weeklyReports         Boolean  @default(true)
+  
+  // Security Settings
+  autoQuarantine        Boolean  @default(true)
+  strictMode            Boolean  @default(false)
+  scanAttachments       Boolean  @default(true)
+  threatSensitivity     Int      @default(3) // 1-5
+  
+  // Sync Settings
+  autoSync              Boolean  @default(true)
+  syncInterval          Int      @default(5) // minutes
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SecurityReport {
+  id                 String   @id @default(cuid())
+  userId             String
+  reportType         String   // "daily", "weekly", "monthly"
+  periodStart        DateTime
+  periodEnd          DateTime
+  
+  totalProcessed     Int      @default(0)
+  safeEmails         Int      @default(0)
+  suspiciousEmails   Int      @default(0)
+  threatsBlocked     Int      @default(0)
+  
+  topThreats         String?  // JSON array of top threat types
+  reportData         String?  // JSON with detailed analytics
+  
+  generatedAt        DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Whitelist {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String?
+  domain    String?
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, email])
+  @@unique([userId, domain])
+}
+
+model Blacklist {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String?
+  domain    String?
+  reason    String?
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, email])
+  @@unique([userId, domain])
+}
