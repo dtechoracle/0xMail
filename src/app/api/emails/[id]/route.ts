@@ -4,9 +4,10 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const authHeader = request.headers.get('Authorization');
     const user = await getUserFromAuth(authHeader);
 
@@ -88,9 +89,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const authHeader = request.headers.get('Authorization');
     const user = await getUserFromAuth(authHeader);
 
@@ -153,9 +155,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const authHeader = request.headers.get('Authorization');
     const user = await getUserFromAuth(authHeader);
 
