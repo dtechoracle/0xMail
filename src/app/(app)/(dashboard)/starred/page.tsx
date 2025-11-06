@@ -24,6 +24,16 @@ export default function StarredPage() {
   const [loading, setLoading] = useState(true);
   const [emails, setEmails] = useState<Email[]>([]);
 
+  // Navigation handler function
+  const handleEmailClick = (emailId: string) => {
+    console.log('Navigating to email from starred:', emailId);
+    const targetUrl = `/home/${emailId}`;
+    console.log('Navigating to:', targetUrl);
+    
+    // Force navigation with window.location for maximum reliability
+    window.location.href = targetUrl;
+  };
+
   useEffect(() => {
     loadStarredEmails();
   }, []);
@@ -221,7 +231,11 @@ export default function StarredPage() {
               emails.map((email) => (
                 <div
                   key={email.id}
-                  onClick={() => router.push(`/home/${email.id}`)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleEmailClick(email.id);
+                  }}
                   className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 hover:bg-[#1E1E1E] transition-colors cursor-pointer"
                 >
                   {/* Status Indicator & Sender */}
@@ -253,7 +267,11 @@ export default function StarredPage() {
                         {email.threatFlags.map((tag, index) => (
                           <span
                             key={index}
-                            className="px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded"
+                            className={`px-2 py-1 text-xs rounded ${
+                              tag === 'Whitelisted sender' 
+                                ? 'bg-green-900/30 text-green-400' 
+                                : 'bg-red-900/30 text-red-400'
+                            }`}
                           >
                             {tag}
                           </span>

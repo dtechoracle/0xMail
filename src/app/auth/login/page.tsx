@@ -50,15 +50,35 @@ export default function LoginPage() {
       const response = await apiClient.login(formData.email, formData.password);
       
       if (response.success) {
-        toast.success("Login Successful! Welcome back! Redirecting...");
-        
-        // Redirect to dashboard
-        setTimeout(() => {
-          window.location.href = '/home';
-        }, 1000);
+        // Check if 2FA verification is required
+        const responseData = response.data as any;
+        if (responseData.requires2FA && responseData.tempToken) {
+          // Store temp token and redirect to 2FA verification
+          toast.info("Please verify with your 2FA code");
+          setTimeout(() => {
+            window.location.href = `/auth/verify-2fa?token=${encodeURIComponent(responseData.tempToken)}`;
+          }, 1000);
+        } else if (responseData.token) {
+          // No 2FA required, proceed with normal login
+          apiClient.setToken(responseData.token);
+          toast.success("Login Successful! Welcome back! Redirecting...");
+          setTimeout(() => {
+            window.location.href = '/home';
+          }, 1000);
+        } else {
+          toast.error("Invalid response from server");
+        }
       }
     } catch (error: any) {
-      toast.error(error.message || "Login failed. Please check your credentials and try again");
+      // Handle email verification error
+      if (error.message && error.message.includes('verify your email')) {
+        toast.error("Please verify your email first");
+        setTimeout(() => {
+          window.location.href = `/auth/verify-email?email=${encodeURIComponent(formData.email)}`;
+        }, 2000);
+      } else {
+        toast.error(error.message || "Login failed. Please check your credentials and try again");
+      }
     } finally {
       setIsLoadingForm(false);
     }

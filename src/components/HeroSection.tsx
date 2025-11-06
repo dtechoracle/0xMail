@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function HeroSection() {
   return (
@@ -39,18 +40,26 @@ export default function HeroSection() {
 
           {/* CTA Buttons */}
           <div className="flex flex-row gap-3 sm:gap-4 justify-center mb-8">
-            <button className="bg-white text-black px-4 sm:px-8 py-3 sm:py-4 rounded-lg font-medium text-sm sm:text-lg hover:bg-gray-100 transition-colors duration-200">
+            <Link 
+              href="/auth/signup"
+              className="bg-white text-black px-4 sm:px-8 py-3 sm:py-4 rounded-lg font-medium text-sm sm:text-lg hover:bg-gray-100 transition-colors duration-200"
+            >
               Get Started Free
-            </button>
-            <button className="border border-gray-400 text-white px-4 sm:px-8 py-3 sm:py-4 rounded-lg font-medium text-sm sm:text-lg hover:border-gray-300 hover:bg-gray-800/50 transition-colors duration-200">
+            </Link>
+            <Link 
+              href="/features"
+              className="border border-gray-400 text-white px-4 sm:px-8 py-3 sm:py-4 rounded-lg font-medium text-sm sm:text-lg hover:border-gray-300 hover:bg-gray-800/50 transition-colors duration-200"
+            >
               See How It Works
-            </button>
+            </Link>
           </div>
 
           {/* Subtitle */}
-          <p className="text-gray-300 text-lg sm:text-xl max-w-2xl mx-auto">
-            Works with Gmail, Outlook, and custom domains. No setup headache.
-          </p>
+        <p className="text-gray-300 text-lg sm:text-xl max-w-2xl mx-auto">
+          Works with Gmail, Outlook, and custom domains. No setup headache.
+        </p>
+
+        {/* AI Demo Pill removed per request */}
         </div>
       </div>
     </section>

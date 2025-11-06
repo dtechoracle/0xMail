@@ -40,7 +40,10 @@ export async function GET(request: NextRequest) {
     const [emails, total] = await Promise.all([
       prisma.email.findMany({
         where,
-        orderBy: { receivedAt: 'desc' },
+        orderBy: [
+          { receivedAt: 'desc' }, // Most recent first
+          { createdAt: 'desc' }   // Then by creation time
+        ],
         skip,
         take: limit,
         select: {

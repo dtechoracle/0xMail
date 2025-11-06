@@ -203,7 +203,11 @@ export default function QuarantinePage() {
                       {item.reason.map((reason: string, index: number) => (
                         <span
                           key={index}
-                          className="px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded"
+                          className={`px-2 py-1 text-xs rounded ${
+                            reason === 'Whitelisted sender' 
+                              ? 'bg-green-900/30 text-green-400' 
+                              : 'bg-red-900/30 text-red-400'
+                          }`}
                         >
                           {reason}
                         </span>

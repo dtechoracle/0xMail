@@ -48,22 +48,39 @@ class APIClient {
       }
     }
 
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log('API Request:', { method: options.method || 'GET', url, headers });
+
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(url, {
         ...options,
         headers,
       });
 
-      const data = await response.json();
+      console.log('API Response:', { status: response.status, ok: response.ok });
+
+      let data: any;
+      try {
+        const text = await response.text();
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', parseError);
+        if (!response.ok) {
+          throw new Error(this.getErrorMessage(response.status));
+        }
+        throw new Error('Invalid response from server');
+      }
 
       if (!response.ok) {
         // Return detailed error message
-        const errorMessage = data.message || this.getErrorMessage(response.status);
-        throw new Error(errorMessage);
+        const errorMessage = data?.message || data?.error || this.getErrorMessage(response.status);
+        console.error('API Error:', { status: response.status, message: errorMessage, data });
+        throw new Error(errorMessage || 'An error occurred');
       }
 
       return data;
     } catch (error: any) {
+      console.error('API Request Error:', error);
       // Handle network errors
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         throw new Error('Network error: Please check your internet connection');
@@ -97,15 +114,15 @@ class APIClient {
   async signup(email: string, password: string, name?: string) {
     const data = await this.request<{
       success: boolean;
-      data: { user: any; token: string };
+      message?: string;
+      data: { user: any };
     }>('/api/auth/signup', {
       method: 'POST',
       body: JSON.stringify({ email, password, name }),
     });
 
-    if (data.success && data.data.token) {
-      this.setToken(data.data.token);
-    }
+    // Note: No token is returned during signup - user must verify email first
+    // Token will be provided after email verification and login
 
     return data;
   }
@@ -113,13 +130,20 @@ class APIClient {
   async login(email: string, password: string) {
     const data = await this.request<{
       success: boolean;
-      data: { user: any; token: string };
+      message?: string;
+      data: { 
+        user: any; 
+        token?: string;
+        requires2FA?: boolean;
+        tempToken?: string;
+      };
     }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
 
-    if (data.success && data.data.token) {
+    // Only set token if 2FA is not required
+    if (data.success && data.data.token && !data.data.requires2FA) {
       this.setToken(data.data.token);
     }
 
@@ -187,6 +211,43 @@ class APIClient {
       message: string;
     }>(`/api/emails/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async replyToEmail(id: string, data: { body: string; cc?: string; bcc?: string }) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      data: any;
+    }>(`/api/emails/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async generateAIReply(data: {
+    prompt: string;
+    emailBody?: string;
+    emailSubject?: string;
+    emailFrom?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      data: { reply: string };
+    }>('/api/emails/ai-reply', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async sendEmail(data: { to: string; subject?: string; body: string; cc?: string; bcc?: string }) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      data: any;
+    }>('/api/emails/send', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 
@@ -381,6 +442,41 @@ class APIClient {
     }>('/api/outlook/sync', {
       method: 'POST',
       body: JSON.stringify({ emailAccountId }),
+    });
+  }
+
+  // Rescan a specific email to generate AI summary and update threat analysis
+  async rescanEmail(id: string) {
+    return this.request<{ success: boolean }>(`/api/emails/${id}/rescan`, {
+      method: 'POST',
+    });
+  }
+
+  // Whitelist management
+  async addToWhitelist(data: { email?: string; domain?: string; reason?: string }) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      data: { whitelistEntry: any };
+    }>('/api/whitelist', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getWhitelist() {
+    return this.request<{
+      success: boolean;
+      data: { whitelist: any[] };
+    }>('/api/whitelist');
+  }
+
+  async removeFromWhitelist(id: string) {
+    return this.request<{
+      success: boolean;
+      message: string;
+    }>(`/api/whitelist/${id}`, {
+      method: 'DELETE',
     });
   }
 }

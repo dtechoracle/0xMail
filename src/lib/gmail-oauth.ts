@@ -90,11 +90,17 @@ export async function fetchGmailMessages(
 
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-  // Get list of message IDs
+  // Get list of message IDs - prioritize today's emails
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+  
   const messagesResponse = await gmail.users.messages.list({
     userId: 'me',
-    maxResults,
-    q: 'in:inbox', // Only fetch inbox emails
+    maxResults: Math.max(maxResults, 200), // Increased to get more emails
+    // Force INBOX label to avoid All Mail/Archives and pull only recent
+    labelIds: ['INBOX'],
+    q: `in:inbox after:${todayStr} OR (in:inbox newer_than:7d)`, // Today's emails first, then last 7 days
+    includeSpamTrash: false,
   });
 
   const messages = messagesResponse.data.messages || [];
@@ -110,6 +116,13 @@ export async function fetchGmailMessages(
       return msg.data;
     })
   );
+
+  // Sort by Gmail's internalDate (ms since epoch) descending to ensure newest first
+  fullMessages.sort((a: any, b: any) => {
+    const ai = a?.internalDate ? parseInt(a.internalDate as string, 10) : 0;
+    const bi = b?.internalDate ? parseInt(b.internalDate as string, 10) : 0;
+    return bi - ai;
+  });
 
   return fullMessages;
 }
@@ -165,6 +178,11 @@ export function parseGmailMessage(message: any) {
 
   parseAttachments(message.payload);
 
+  // Prefer Gmail's internalDate (milliseconds since epoch) for accurate ordering
+  const internalDate = message.internalDate
+    ? new Date(parseInt(message.internalDate as string, 10)).toISOString()
+    : '';
+
   return {
     messageId: message.id!,
     threadId: message.threadId!,
@@ -173,7 +191,7 @@ export function parseGmailMessage(message: any) {
     to: getHeader('To'),
     cc: getHeader('Cc'),
     bcc: getHeader('Bcc'),
-    date: getHeader('Date'),
+    date: internalDate || getHeader('Date'),
     body: body || htmlBody,
     htmlBody,
     labels: message.labelIds || [],

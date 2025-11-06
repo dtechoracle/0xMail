@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function CTASection() {
   return (
     <section className="w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
@@ -14,12 +16,15 @@ export default function CTASection() {
 
           {/* CTA Button */}
           <div className="mb-8">
-            <button className="bg-white text-black px-8 py-4 rounded-lg font-medium text-lg hover:bg-gray-100 transition-colors duration-200 inline-flex items-center gap-2">
+            <Link 
+              href="/auth/signup"
+              className="bg-white text-black px-8 py-4 rounded-lg font-medium text-lg hover:bg-gray-100 transition-colors duration-200 inline-flex items-center gap-2"
+            >
               Start Free Trial
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-            </button>
+            </Link>
           </div>
 
           {/* Disclaimer */}

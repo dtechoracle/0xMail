@@ -77,6 +77,20 @@ export default function FeaturesSection() {
       title: "Continuous Learning",
       description: "0xMail gets smarter with every threat it catches, adapting to new phishing techniques daily."
     }
+    ,
+    {
+      icon: (
+        <div className="flex items-center justify-center w-12 h-12">
+          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.343-3 3v1H7a2 2 0 00-2 2v3h14v-3a2 2 0 00-2-2h-2v-1c0-1.657-1.343-3-3-3z" />
+            </svg>
+          </div>
+        </div>
+      ),
+      title: "AI Reply Assistant",
+      description: "Compose replies instantly. Type # followed by your prompt to generate a professional response in context."
+    }
   ];
 
   return (
@@ -101,9 +115,12 @@ export default function FeaturesSection() {
           <div className="relative z-10 px-4 sm:px-12 lg:px-16 py-20 sm:py-32">
         {/* Section Header */}
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-8">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3">
             Built to stop phishing in its tracks.
           </h2>
+          <p className="text-gray-300 max-w-2xl mx-auto">
+            New: AI Reply Assistant — type <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded">#your prompt</span> to generate a polished reply from any email.
+          </p>
         </div>
 
             {/* Features Grid */}

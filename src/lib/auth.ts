@@ -71,6 +71,8 @@ export async function getUserFromAuth(authHeader: string | null) {
       name: true,
       image: true,
       emailVerified: true,
+      twoFactorEnabled: true,
+      twoFactorSecret: true,
     },
   });
 

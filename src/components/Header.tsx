@@ -32,7 +32,7 @@ export default function Header() {
 
           <div className="flex items-center">
             <Link
-              href="/get-started"
+              href="/auth/signup"
               className="bg-white text-black px-6 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors duration-200"
             >
               Get Started

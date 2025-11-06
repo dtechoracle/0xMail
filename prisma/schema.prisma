@@ -17,6 +17,16 @@ model User {
   password      String?
   emailVerified DateTime?
   image         String?
+  
+  // Email Verification OTP
+  emailVerificationOTP        String?
+  emailVerificationOTPExpires  DateTime?
+  
+  // Two-Factor Authentication
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret  String?
+  twoFactorBackupCodes String? // JSON array of backup codes
+  
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -163,6 +173,7 @@ model ThreatAnalysis {
   aiConfidenceScore     Float?   // 0.0-1.0
   aiPrediction          String?  // "safe", "suspicious", "malicious"
   aiReasoningFlags      String?  // JSON array
+  aiSummary             String?  // short human summary of email intent
   
   analyzedAt            DateTime @default(now())
   

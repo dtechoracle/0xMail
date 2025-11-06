@@ -55,14 +55,11 @@ export default function SignupPage() {
       );
       
       if (response.success) {
-        toast.success("Account Created! Welcome to 0xMail! Redirecting...");
+        toast.success("Account created! Please verify your email.");
         
-        // Set first login flag for new users
-        localStorage.setItem('isFirstLogin', 'true');
-        
-        // Redirect to dashboard
+        // Redirect to email verification page
         setTimeout(() => {
-          window.location.href = '/home';
+          window.location.href = `/auth/verify-email?email=${encodeURIComponent(formData.email)}`;
         }, 1000);
       }
     } catch (error: any) {

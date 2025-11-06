@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Fetch messages from Gmail
+    // Fetch messages from Gmail (already sorted by internalDate desc)
     const messages = await fetchGmailMessages(
       accessToken,
       emailAccount.refreshToken,
@@ -85,13 +85,21 @@ export async function POST(request: NextRequest) {
     for (const message of messages) {
       const parsedEmail = parseGmailMessage(message);
 
-      // Check if email already exists
+      // Check if email already exists; also update receivedAt if changed/newer
       const existingEmail = await prisma.email.findUnique({
         where: { messageId: parsedEmail.messageId },
       });
 
       if (existingEmail) {
-        continue; // Skip if already imported
+        // If Gmail updated internalDate, ensure our receivedAt reflects it
+        const newReceivedAt = new Date(parsedEmail.date || Date.now());
+        if (existingEmail.receivedAt.getTime() !== newReceivedAt.getTime()) {
+          await prisma.email.update({
+            where: { id: existingEmail.id },
+            data: { receivedAt: newReceivedAt },
+          });
+        }
+        continue; // Skip content import
       }
 
       // Create email in database
@@ -108,6 +116,7 @@ export async function POST(request: NextRequest) {
           bcc: parsedEmail.bcc,
           body: parsedEmail.body,
           htmlBody: parsedEmail.htmlBody,
+          // Use internalDate if available for accurate sorting
           receivedAt: new Date(parsedEmail.date || Date.now()),
           labels: JSON.stringify(parsedEmail.labels),
           attachments: parsedEmail.attachments,
@@ -120,15 +129,36 @@ export async function POST(request: NextRequest) {
 
       imported++;
 
-      // Scan email for threats (async, don't wait)
-      scanEmail(email.id, {
-        from: parsedEmail.from,
-        subject: parsedEmail.subject,
-        body: parsedEmail.body,
-        htmlBody: parsedEmail.htmlBody,
-      }).catch((error) => {
-        console.error('Scan error for email:', email.id, error);
-      });
+      // Scan email for threats - wait for first few emails to ensure summaries are ready
+      if (imported <= 10) {
+        // Wait for scan to complete for first 10 emails to ensure summaries are ready
+        try {
+          await scanEmail(email.id, {
+            from: parsedEmail.from,
+            subject: parsedEmail.subject,
+            body: parsedEmail.body,
+            htmlBody: parsedEmail.htmlBody,
+            spfResult: parsedEmail.spfResult,
+            dkimResult: parsedEmail.dkimResult,
+            dmarcResult: parsedEmail.dmarcResult,
+          });
+        } catch (error) {
+          console.error('Scan error for email:', email.id, error);
+        }
+      } else {
+        // For remaining emails, scan async to not block the sync
+        scanEmail(email.id, {
+          from: parsedEmail.from,
+          subject: parsedEmail.subject,
+          body: parsedEmail.body,
+          htmlBody: parsedEmail.htmlBody,
+          spfResult: parsedEmail.spfResult,
+          dkimResult: parsedEmail.dkimResult,
+          dmarcResult: parsedEmail.dmarcResult,
+        }).catch((error) => {
+          console.error('Scan error for email:', email.id, error);
+        });
+      }
 
       scanned++;
     }

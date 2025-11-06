@@ -38,10 +38,40 @@ export default function HomePage() {
   });
   const [showAddEmailModal, setShowAddEmailModal] = useState(false);
   const [connectedAccounts, setConnectedAccounts] = useState<any[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Navigation handler function
+  const handleEmailClick = (emailId: string) => {
+    console.log('Navigating to email:', emailId);
+    const targetUrl = `/home/${emailId}`;
+    console.log('Navigating to:', targetUrl);
+    
+    // Force navigation with window.location for maximum reliability
+    window.location.href = targetUrl;
+  };
 
   useEffect(() => {
     loadData();
     checkFirstLogin();
+    
+    // Refresh data when component mounts (e.g., when returning from email detail)
+    const handleFocus = () => {
+      console.log('Page focused, refreshing data...');
+      loadData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+
+    // Lightweight live sync: periodically sync active Gmail accounts and refresh list
+    const interval = setInterval(async () => {
+      await syncEmails(true); // silent sync
+    }, 10000); // every 10s for faster updates
+
+    return () => clearInterval(interval);
   }, []);
 
   // Check if user is new and show modal on first login
@@ -78,6 +108,57 @@ export default function HomePage() {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Manual sync function
+  async function syncEmails(silent = false) {
+    if (isSyncing) return; // Prevent multiple simultaneous syncs
+    
+    try {
+      if (!silent) {
+        setIsSyncing(true);
+        toast.info("Syncing emails...");
+      }
+
+      const accountsRes = await apiClient.getEmailAccounts();
+      const gmailAccounts = (accountsRes?.data?.emailAccounts || [])
+        .filter((a: any) => a.provider === 'gmail' && a.isActive);
+
+      for (const acc of gmailAccounts) {
+        try {
+          await apiClient.syncGmailAccount(acc.id);
+        } catch (e) {
+          console.error('Sync error for account:', acc.id, e);
+        }
+      }
+
+      // Refresh inbox after syncs
+      const [emailsRes, statsRes] = await Promise.all([
+        apiClient.getEmails({ page: 1, limit: 30 }),
+        apiClient.getStats(),
+      ]);
+
+      if (emailsRes.success) {
+        setEmails(emailsRes.data.emails);
+      }
+
+      if (statsRes.success) {
+        setStats(statsRes.data);
+      }
+      
+      if (!silent) {
+        toast.success("Emails synced successfully!");
+      }
+    } catch (e: any) {
+      console.error('Sync error:', e);
+      if (!silent) {
+        toast.error("Failed to sync emails");
+      }
+    } finally {
+      if (!silent) {
+        setIsSyncing(false);
+      }
     }
   }
 
@@ -305,15 +386,22 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-b border-[#1E1E1E] bg-[#151515] gap-3">
             <h2 className="text-xl font-semibold">Recent Emails</h2>
             <div className="flex items-center gap-4">
+              <button
+                onClick={() => { window.location.href = '/compose'; }}
+                className="bg-white text-black px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              >
+                Compose
+              </button>
               <span className="text-sm text-white">
                 {emails.length} of {stats.totalProcessed}
               </span>
               <button
-                onClick={loadData}
-                className="flex items-center gap-2 px-3 py-2 bg-black hover:bg-[#1E1E1E] rounded-lg transition-colors"
+                onClick={() => syncEmails(false)}
+                disabled={isSyncing}
+                className="flex items-center gap-2 px-3 py-2 bg-black hover:bg-[#1E1E1E] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg
-                  className="w-4 h-4"
+                  className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -325,7 +413,7 @@ export default function HomePage() {
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-                <span className="text-sm">Refresh</span>
+                <span className="text-sm">{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
               </button>
             </div>
           </div>
@@ -346,7 +434,11 @@ export default function HomePage() {
               emails.map((email) => (
                 <div
                   key={email.id}
-                  onClick={() => router.push(`/home/${email.id}`)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleEmailClick(email.id);
+                  }}
                   className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 hover:bg-[#1E1E1E] transition-colors cursor-pointer"
                 >
                   {/* Status Indicator & Sender */}
@@ -378,7 +470,11 @@ export default function HomePage() {
                         {email.threatFlags.map((tag, index) => (
                           <span
                             key={index}
-                            className="px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded"
+                            className={`px-2 py-1 text-xs rounded ${
+                              tag === 'Whitelisted sender' 
+                                ? 'bg-green-900/30 text-green-400' 
+                                : 'bg-red-900/30 text-red-400'
+                            }`}
                           >
                             {tag}
                           </span>
