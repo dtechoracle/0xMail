@@ -41,14 +41,6 @@ export async function POST(request: NextRequest) {
     // Get user with 2FA secret
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        twoFactorEnabled: true,
-        twoFactorSecret: true,
-        twoFactorBackupCodes: true,
-      },
     });
 
     if (!user) {

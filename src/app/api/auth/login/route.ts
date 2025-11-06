@@ -39,16 +39,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if email is verified
+    // Check if email is verified and get 2FA status
     const fullUser = await prisma.user.findUnique({
       where: { id: user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        emailVerified: true,
-        twoFactorEnabled: true,
-      },
     });
 
     if (!fullUser?.emailVerified) {
