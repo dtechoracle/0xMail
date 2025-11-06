@@ -59,7 +59,7 @@ export async function POST() {
       from: email.from,
       subject: email.subject,
       body: email.body,
-      htmlBody: email.htmlBody,
+      htmlBody: email.htmlBody || undefined,
     });
 
     // Fetch the updated email

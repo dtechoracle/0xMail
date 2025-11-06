@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
-export default function Verify2FAPage() {
+function Verify2FAContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [verificationCode, setVerificationCode] = useState("");
@@ -100,6 +100,27 @@ export default function Verify2FAPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Verify2FAPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
+          <div className="w-full max-w-md">
+            <div className="bg-[#151515] rounded-2xl p-8 border border-[#1E1E1E]">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                <p className="text-gray-400">Loading...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <Verify2FAContent />
+    </Suspense>
   );
 }
 

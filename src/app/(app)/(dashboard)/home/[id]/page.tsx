@@ -51,7 +51,7 @@ export default function EmailDetailPage() {
           console.log('Generated summary:', summary);
           
           // Update the email state with the summary
-          setEmail(prev => prev ? {
+          setEmail((prev: any) => prev ? {
             ...prev,
             analysis: {
               ...prev.analysis,
@@ -61,7 +61,7 @@ export default function EmailDetailPage() {
         }
       } catch (error) {
         console.error('Failed to generate summary:', error);
-        setEmail(prev => prev ? {
+        setEmail((prev: any) => prev ? {
           ...prev,
           analysis: {
             ...prev.analysis,
