@@ -32,16 +32,21 @@ export default function Setup2FAPage() {
 
       const data = await response.json();
 
+      if (response.status === 401) {
+        toast.error("Session expired. Please sign in again.");
+        router.push("/auth/login");
+        return;
+      }
+
       if (data.success) {
         setQrCode(data.data.qrCode);
         setManualKey(data.data.manualEntryKey);
       } else {
         toast.error(data.message || "Failed to set up 2FA");
-        router.push("/home");
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to set up 2FA");
-      router.push("/home");
+      router.push("/auth/login");
     } finally {
       setIsLoading(false);
     }
@@ -66,6 +71,12 @@ export default function Setup2FAPage() {
       });
 
       const data = await response.json();
+
+      if (response.status === 401) {
+        toast.error("Session expired. Please sign in again.");
+        router.push("/auth/login");
+        return;
+      }
 
       if (data.success) {
         setBackupCodes(data.data.backupCodes);

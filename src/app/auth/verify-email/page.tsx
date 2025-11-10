@@ -35,6 +35,9 @@ function VerifyEmailContent() {
 
       if (data.success) {
         toast.success("Email verified successfully!");
+        if (data.data?.token) {
+          apiClient.setToken(data.data.token);
+        }
         
         // Check if user needs 2FA setup (new users)
         if (data.data?.requires2FASetup) {

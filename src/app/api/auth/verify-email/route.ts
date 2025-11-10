@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { sendVerificationOTP } from '@/lib/resend';
+import { generateToken } from '@/lib/auth';
 
 const requestOTPSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -168,9 +169,15 @@ export async function PUT(request: NextRequest) {
       },
     });
 
+    // Generate auth token for immediate 2FA setup
+    const authToken = generateToken({
+      userId: user.id,
+      email: user.email,
+    });
+
     // Check if user is new (created in last 24 hours) and 2FA not enabled
-    const isNewUser = 
-      user.createdAt && 
+    const isNewUser =
+      user.createdAt &&
       new Date().getTime() - new Date(user.createdAt).getTime() < 24 * 60 * 60 * 1000 &&
       !user.twoFactorEnabled;
 
@@ -180,6 +187,7 @@ export async function PUT(request: NextRequest) {
         message: 'Email verified successfully',
         data: {
           requires2FASetup: isNewUser || false,
+          token: authToken,
         },
       },
       { status: 200 }
