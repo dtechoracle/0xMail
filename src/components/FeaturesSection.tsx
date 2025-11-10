@@ -118,9 +118,9 @@ export default function FeaturesSection() {
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3">
             Built to stop phishing in its tracks.
           </h2>
-          <p className="text-gray-300 max-w-2xl mx-auto">
+          {/* <p className="text-gray-300 max-w-2xl mx-auto">
             New: AI Reply Assistant — type <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded">#your prompt</span> to generate a polished reply from any email.
-          </p>
+          </p> */}
         </div>
 
             {/* Features Grid */}
