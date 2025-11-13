@@ -5,10 +5,12 @@ import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
 
 function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { checkAuth } = useAuth();
   const email = searchParams.get("email") || "";
   
   const [otp, setOtp] = useState("");
@@ -37,6 +39,8 @@ function VerifyEmailContent() {
         toast.success("Email verified successfully!");
         if (data.data?.token) {
           apiClient.setToken(data.data.token);
+          // Refresh auth context
+          await checkAuth();
         }
         
         // Check if user needs 2FA setup (new users)

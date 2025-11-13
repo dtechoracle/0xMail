@@ -3,10 +3,13 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/contexts/AuthContext";
 
 function Verify2FAContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { checkAuth } = useAuth();
   const [verificationCode, setVerificationCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const tempToken = searchParams.get("token") || "";
@@ -36,8 +39,10 @@ function Verify2FAContent() {
       const data = await response.json();
 
       if (data.success) {
-        // Store the final token
-        localStorage.setItem("authToken", data.data.token);
+        // Store the final token using apiClient
+        apiClient.setToken(data.data.token);
+        // Refresh auth context
+        await checkAuth();
         toast.success("2FA verified successfully!");
         setTimeout(() => {
           router.push("/home");

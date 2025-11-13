@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Matrix loading component
 function MatrixLoader() {
@@ -27,6 +28,7 @@ function MatrixLoader() {
 }
 
 export default function LoginPage() {
+  const { checkAuth } = useAuth();
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const [isLoadingForm, setIsLoadingForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -61,6 +63,8 @@ export default function LoginPage() {
         } else if (responseData.token) {
           // No 2FA required, proceed with normal login
           apiClient.setToken(responseData.token);
+          // Refresh auth context
+          await checkAuth();
           toast.success("Login Successful! Welcome back! Redirecting...");
           setTimeout(() => {
             window.location.href = '/home';
