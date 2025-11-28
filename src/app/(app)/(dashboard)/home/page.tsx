@@ -288,10 +288,10 @@ export default function HomePage() {
   }
 
   return (
-    <div className="bg-black min-h-screen text-white p-4 sm:p-6">
+    <div className="bg-black min-h-screen text-white p-0 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Stats Cards */}
-        <div className="mb-6">
+        {/* Stats Cards - Hidden on mobile, shown on larger screens */}
+        <div className="mb-4 sm:mb-6 hidden sm:block">
           <div className="flex overflow-x-auto gap-4 pb-2 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-x-visible">
             <div className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E] min-w-[280px] sm:min-w-0">
               <div className="flex items-center gap-2 mb-2">
@@ -376,13 +376,13 @@ export default function HomePage() {
         </div>
 
         {/* Emails Section - Gmail Style */}
-        <div className="bg-black border border-[#1E1E1E] rounded-lg overflow-hidden">
+        <div className="bg-black border-0 sm:border border-[#1E1E1E] rounded-none sm:rounded-lg overflow-hidden">
           {/* Header - Gmail Style */}
-          <div className="flex items-center justify-between px-2 sm:px-4 py-2 border-b border-[#1E1E1E] bg-[#151515]">
+          <div className="flex items-center justify-between px-2 sm:px-4 py-1.5 sm:py-2 border-b border-[#1E1E1E] bg-[#151515]">
             <div className="flex items-center gap-2 flex-1">
               <button
                 onClick={() => { window.location.href = '/compose'; }}
-                className="bg-white text-black px-3 py-1.5 rounded text-sm font-medium hover:bg-gray-200 transition-colors"
+                className="bg-white text-black px-2.5 sm:px-3 py-1 sm:py-1.5 rounded text-xs sm:text-sm font-medium hover:bg-gray-200 transition-colors"
               >
                 Compose
               </button>
@@ -441,20 +441,20 @@ export default function HomePage() {
                     e.stopPropagation();
                     handleEmailClick(email.id);
                   }}
-                  className="flex items-start gap-3 px-3 sm:px-4 py-3 hover:bg-[#1E1E1E] transition-colors cursor-pointer group"
+                  className="flex items-start gap-2 sm:gap-3 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 hover:bg-[#1E1E1E] transition-colors cursor-pointer group"
                 >
                   {/* Left Side: Star, Avatar, Status */}
-                  <div className="flex items-start gap-2 flex-shrink-0">
-                    {/* Star Icon */}
+                  <div className="flex items-start gap-1.5 sm:gap-2 flex-shrink-0">
+                    {/* Star Icon - Always visible on mobile if starred */}
                     <button
-                      className="p-1 opacity-0 group-hover:opacity-100 transition-opacity mt-1"
+                      className={`p-0.5 sm:p-1 ${email.isStarred ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity mt-0.5 sm:mt-1`}
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleStar(email.id);
                       }}
                     >
                       <svg
-                        className={`w-4 h-4 ${email.isStarred ? 'text-yellow-400 fill-yellow-400 opacity-100' : 'text-gray-500'}`}
+                        className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${email.isStarred ? 'text-yellow-400 fill-yellow-400' : 'text-gray-500'}`}
                         fill={email.isStarred ? "currentColor" : "none"}
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -468,15 +468,15 @@ export default function HomePage() {
                       </svg>
                     </button>
 
-                    {/* Sender Avatar/Initials - Top Left */}
+                    {/* Sender Avatar/Initials - Smaller on mobile */}
                     <div className="flex-shrink-0">
                       {(() => {
                         const senderName = email.from.split("<")[0].trim() || email.from;
                         const senderEmail = email.from.match(/<([^>]+)>/)?.[1] || email.from;
                         const initials = senderName
                           .split(' ')
-                          .filter(n => n.length > 0)
-                          .map(n => n[0])
+                          .filter((n: string) => n.length > 0)
+                          .map((n: string) => n[0])
                           .join('')
                           .toUpperCase()
                           .slice(0, 2) || senderEmail.charAt(0).toUpperCase();
@@ -496,15 +496,15 @@ export default function HomePage() {
                         const colorClass = colors[colorIndex];
                         
                         return (
-                          <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${colorClass} flex items-center justify-center text-white text-xs font-medium flex-shrink-0`}>
+                          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br ${colorClass} flex items-center justify-center text-white text-[10px] sm:text-xs font-medium flex-shrink-0`}>
                             {initials}
                           </div>
                         );
                       })()}
                     </div>
 
-                    {/* Status Indicator - Small badge */}
-                    <div className={`${getStatusColor(email.threatLevel)} text-xs flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-2`}>
+                    {/* Status Indicator - Hidden on mobile */}
+                    <div className={`${getStatusColor(email.threatLevel)} text-xs flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-1.5 sm:mt-2 hidden sm:block`}>
                       {getStatusIcon(email.threatLevel)}
                     </div>
                   </div>
@@ -512,24 +512,24 @@ export default function HomePage() {
                   {/* Main Content: Sender, Subject, Body */}
                   <div className="flex-1 min-w-0">
                     {/* Sender Name - Top */}
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-medium text-sm text-white truncate">
+                    <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
+                      <p className="font-medium text-xs sm:text-sm text-white truncate">
                         {email.from.split("<")[0].trim() || email.from}
                       </p>
-                      {/* Threat Flags - Inline with sender */}
+                      {/* Threat Flags - Inline with sender, smaller on mobile */}
                       {email.threatFlags && email.threatFlags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-0.5 sm:gap-1">
                           {(() => {
                             // Prioritize "Whitelisted sender" if it exists
                             const hasWhitelisted = email.threatFlags.includes('Whitelisted sender');
                             const flagsToShow = hasWhitelisted 
-                              ? ['Whitelisted sender', ...email.threatFlags.filter(f => f !== 'Whitelisted sender')].slice(0, 2)
-                              : email.threatFlags.slice(0, 2);
+                              ? ['Whitelisted sender', ...email.threatFlags.filter((f: string) => f !== 'Whitelisted sender')].slice(0, 1)
+                              : email.threatFlags.slice(0, 1);
                             
                             return flagsToShow.map((tag, index) => (
                               <span
                                 key={index}
-                                className={`px-1.5 py-0.5 text-xs rounded ${
+                                className={`px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-xs rounded ${
                                   tag === 'Whitelisted sender' 
                                     ? 'bg-green-900/30 text-green-400 border border-green-800/50' 
                                     : 'bg-red-900/30 text-red-400'
@@ -543,36 +543,36 @@ export default function HomePage() {
                       )}
                     </div>
 
-                    {/* Subject - Truncated */}
-                    <div className="mb-1">
-                      <span className="font-medium text-sm text-white truncate block">
+                    {/* Subject - Truncated, smaller on mobile */}
+                    <div className="mb-0.5 sm:mb-1">
+                      <span className="font-medium text-xs sm:text-sm text-white truncate block">
                         {email.subject || "(No subject)"}
                       </span>
                     </div>
 
-                    {/* Email Body Snippet - Truncated */}
-                    <div className="mb-1">
-                      <span className="text-xs text-gray-400 line-clamp-2">
+                    {/* Email Body Snippet - Truncated, single line on mobile */}
+                    <div className="mb-0 sm:mb-1">
+                      <span className="text-[11px] sm:text-xs text-gray-400 line-clamp-1 sm:line-clamp-2">
                         {email.body.replace(/\s+/g, ' ').trim()}
-                        {email.body.length > 100 ? '...' : ''}
+                        {email.body.length > 80 ? '...' : ''}
                       </span>
                     </div>
                   </div>
 
                   {/* Right Side: Time & Actions */}
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                  <div className="flex flex-col items-end gap-0.5 sm:gap-1 flex-shrink-0">
+                    <span className="text-[10px] sm:text-xs text-gray-400 whitespace-nowrap">
                       {formatTime(email.receivedAt)}
                     </span>
                     <button
-                      className="p-1 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white"
+                      className="p-0.5 sm:p-1 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white"
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteEmail(email.id);
                       }}
                     >
                       <svg
-                        className="w-4 h-4"
+                        className="w-3.5 h-3.5 sm:w-4 sm:h-4"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
