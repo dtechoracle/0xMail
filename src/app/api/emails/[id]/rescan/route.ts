@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { scanEmail } from '@/lib/ai-scanner';
+import { getUserFromAuth } from '@/lib/auth';
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params;
     console.log('Starting rescan for email:', id);
+
+    const authHeader = request.headers.get('Authorization');
+    const user = await getUserFromAuth(authHeader);
+
+    if (!user) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
 
     const email = await prisma.email.findUnique({
       where: { id },
@@ -30,7 +38,7 @@ export async function POST(
       spfResult: email.spfResult || undefined,
       dkimResult: email.dkimResult || undefined,
       dmarcResult: email.dmarcResult || undefined,
-    });
+    }, user.id);
 
     console.log('Scan completed successfully:', scanResult);
 

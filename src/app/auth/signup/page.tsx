@@ -38,9 +38,13 @@ export default function SignupPage() {
   const handleGoogleSignup = async (e: React.MouseEvent) => {
     e.preventDefault();
     setIsLoadingGoogle(true);
-    // TODO: Implement Google OAuth for signup
-    toast.info("Coming Soon - Google OAuth signup is coming soon!");
-    setIsLoadingGoogle(false);
+    try {
+      // Redirect to NextAuth Google OAuth
+      window.location.href = "/api/auth/signin/google";
+    } catch (error) {
+      toast.error("Failed to initiate Google signup");
+      setIsLoadingGoogle(false);
+    }
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {

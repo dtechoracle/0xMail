@@ -16,7 +16,11 @@ export default function DashboardLayout({
     return (
       <div className="flex h-screen bg-black items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="flex gap-2 justify-center mb-4">
+            <div className="w-3 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-3 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-3 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+          </div>
           <p className="text-gray-400">Loading...</p>
         </div>
       </div>

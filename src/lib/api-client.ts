@@ -3,6 +3,7 @@
  * Use this in your frontend components to make API calls
  */
 
+// Use relative URLs for Next.js API routes (same origin)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 class APIClient {
@@ -48,8 +49,10 @@ class APIClient {
       }
     }
 
-    const url = `${API_BASE_URL}${endpoint}`;
-    console.log('API Request:', { method: options.method || 'GET', url, headers });
+    // Ensure endpoint starts with / for relative URLs
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = API_BASE_URL ? `${API_BASE_URL}${normalizedEndpoint}` : normalizedEndpoint;
+    console.log('API Request:', { method: options.method || 'GET', url, endpoint, normalizedEndpoint, API_BASE_URL });
 
     try {
       const response = await fetch(url, {
@@ -57,25 +60,56 @@ class APIClient {
         headers,
       });
 
-      console.log('API Response:', { status: response.status, ok: response.ok });
+      console.log('API Response:', { status: response.status, ok: response.ok, url });
 
-      let data: any;
+      let data: any = {};
+      const contentType = response.headers.get('content-type');
+      let responseText = '';
+      
       try {
-        const text = await response.text();
-        data = text ? JSON.parse(text) : {};
-      } catch (parseError) {
-        console.error('Failed to parse response as JSON:', parseError);
+        responseText = await response.text();
+        console.log('Response text:', responseText.substring(0, 200)); // Log first 200 chars
+        
+        if (responseText) {
+          if (contentType?.includes('application/json')) {
+            try {
+              data = JSON.parse(responseText);
+            } catch (jsonError) {
+              console.error('JSON parse error:', jsonError, 'Text:', responseText);
+              data = { message: responseText, raw: responseText, parseError: true };
+            }
+          } else {
+            // If response is not JSON, use the text as error message
+            data = { message: responseText, raw: responseText };
+          }
+        } else {
+          // Empty response
+          data = { message: 'Empty response from server', raw: '' };
+        }
+      } catch (parseError: any) {
+        console.error('Failed to read response:', parseError);
+        // If parsing fails and response is not ok, throw with status
         if (!response.ok) {
-          throw new Error(this.getErrorMessage(response.status));
+          const errorMsg = this.getErrorMessage(response.status);
+          throw new Error(errorMsg || `Request failed with status ${response.status}: ${response.statusText}`);
         }
         throw new Error('Invalid response from server');
       }
 
       if (!response.ok) {
         // Return detailed error message
-        const errorMessage = data?.message || data?.error || this.getErrorMessage(response.status);
-        console.error('API Error:', { status: response.status, message: errorMessage, data });
-        throw new Error(errorMessage || 'An error occurred');
+        const errorMessage = data?.message || data?.error || data?.raw || this.getErrorMessage(response.status);
+        const errorDetails = { 
+          status: response.status, 
+          statusText: response.statusText,
+          message: errorMessage, 
+          data: Object.keys(data).length > 0 ? data : 'Empty data object',
+          url,
+          contentType,
+          responseText: responseText.substring(0, 500) // First 500 chars
+        };
+        console.error('API Error:', errorDetails);
+        throw new Error(errorMessage || `Request failed with status ${response.status}: ${response.statusText}`);
       }
 
       return data;

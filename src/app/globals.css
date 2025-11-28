@@ -35,3 +35,25 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #606060;
 }
+
+/* Force dark backgrounds for email content */
+.email-content,
+.email-content * {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+.email-content [style*="background-color"]:not([style*="transparent"]):not([style*="rgba(0,0,0"]),
+.email-content [bgcolor] {
+  background-color: #1a1a1a !important;
+  color: #ffffff !important;
+}
+
+/* Ensure tables and cells have dark backgrounds */
+.email-content table,
+.email-content td,
+.email-content th {
+  background-color: #1a1a1a !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}

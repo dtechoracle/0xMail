@@ -101,12 +101,14 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error);
+    const errorMessage = error?.message || 'An error occurred during login';
     return NextResponse.json(
       {
         success: false,
-        message: 'An error occurred during login',
+        message: errorMessage,
+        error: error?.stack || error,
       },
       { status: 500 }
     );

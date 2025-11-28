@@ -39,9 +39,13 @@ export default function LoginPage() {
   const handleGoogleLogin = async (e: React.MouseEvent) => {
     e.preventDefault();
     setIsLoadingGoogle(true);
-    // TODO: Implement Google OAuth for login
-    toast.info("Coming Soon - Google OAuth login is coming soon!");
-    setIsLoadingGoogle(false);
+    try {
+      // Redirect to NextAuth Google OAuth
+      window.location.href = "/api/auth/signin/google";
+    } catch (error) {
+      toast.error("Failed to initiate Google login");
+      setIsLoadingGoogle(false);
+    }
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {

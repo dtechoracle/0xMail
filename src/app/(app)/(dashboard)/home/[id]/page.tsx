@@ -262,11 +262,25 @@ export default function EmailDetailPage() {
       setIsWhitelisted(true);
       toast.success('Sender marked as safe');
       
-      // Trigger a rescan to update the threat analysis
-      await apiClient.rescanEmail(params.id as string);
+      // Update email state immediately to show whitelisted status
+      setEmail((prev: any) => prev ? {
+        ...prev,
+        threatLevel: 'safe',
+        threatFlags: [
+          ...(prev.threatFlags || []).filter((flag: string) => flag !== 'Whitelisted sender'),
+          'Whitelisted sender'
+        ]
+      } : prev);
       
-      // Refresh email details
-      await fetchEmailDetails();
+      // Trigger a rescan to update the threat analysis (async, don't wait)
+      apiClient.rescanEmail(params.id as string).then(() => {
+        // Refresh email details after rescan completes
+        fetchEmailDetails();
+      }).catch((error) => {
+        console.error('Rescan error after marking safe:', error);
+        // Still refresh to get updated data
+        fetchEmailDetails();
+      });
       
     } catch (error: any) {
       console.error('Mark as safe error:', error);
@@ -278,26 +292,57 @@ export default function EmailDetailPage() {
 
   if (loading) {
     return (
-      <div className="bg-black min-h-screen text-white p-4 sm:p-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="bg-black min-h-screen text-white">
+        <div className="max-w-6xl mx-auto">
           {/* Header Skeleton */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-            <div className="h-10 w-40 bg-[#1E1E1E] rounded animate-pulse"></div>
-            <div className="h-10 w-48 bg-[#1E1E1E] rounded animate-pulse"></div>
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[#1E1E1E] bg-[#151515]">
+            <div className="h-6 w-20 bg-[#1E1E1E] rounded animate-pulse"></div>
+            <div className="flex gap-2">
+              <div className="h-6 w-16 bg-[#1E1E1E] rounded animate-pulse"></div>
+              <div className="h-6 w-16 bg-[#1E1E1E] rounded animate-pulse"></div>
+            </div>
           </div>
 
           {/* Content Skeleton */}
-          <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <EmailDetailSkeleton />
+          <div className="flex gap-4 pt-3">
+            <div className="flex-1 lg:max-w-3xl space-y-4">
+              {/* Subject Skeleton */}
+              <div className="px-4 py-3 border-b border-[#1E1E1E]">
+                <div className="h-6 w-3/4 bg-[#1E1E1E] rounded animate-pulse mb-2"></div>
+                <div className="h-4 w-48 bg-[#1E1E1E] rounded animate-pulse"></div>
+              </div>
+
+              {/* Sender Skeleton */}
+              <div className="px-4 py-3 border-b border-[#1E1E1E]">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-[#1E1E1E] rounded-full animate-pulse"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-48 bg-[#1E1E1E] rounded animate-pulse"></div>
+                    <div className="h-3 w-32 bg-[#1E1E1E] rounded animate-pulse"></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Skeleton */}
+              <div className="px-4 py-4">
+                <div className="space-y-2">
+                  <div className="h-4 w-full bg-[#1E1E1E] rounded animate-pulse"></div>
+                  <div className="h-4 w-full bg-[#1E1E1E] rounded animate-pulse"></div>
+                  <div className="h-4 w-3/4 bg-[#1E1E1E] rounded animate-pulse"></div>
+                  <div className="h-4 w-full bg-[#1E1E1E] rounded animate-pulse"></div>
+                  <div className="h-4 w-5/6 bg-[#1E1E1E] rounded animate-pulse"></div>
+                </div>
+              </div>
             </div>
-            <div className="space-y-6">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E]">
-                  <div className="h-5 w-32 bg-[#1E1E1E] rounded animate-pulse mb-4"></div>
+
+            {/* Sidebar Skeleton */}
+            <div className="hidden lg:block w-64 flex-shrink-0 space-y-4 pt-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
+                  <div className="h-4 w-24 bg-[#1E1E1E] rounded animate-pulse mb-3"></div>
                   <div className="space-y-2">
-                    <div className="h-4 w-full bg-[#1E1E1E] rounded animate-pulse"></div>
-                    <div className="h-4 w-3/4 bg-[#1E1E1E] rounded animate-pulse"></div>
+                    <div className="h-3 w-full bg-[#1E1E1E] rounded animate-pulse"></div>
+                    <div className="h-3 w-3/4 bg-[#1E1E1E] rounded animate-pulse"></div>
                   </div>
                 </div>
               ))}
@@ -332,6 +377,19 @@ export default function EmailDetailPage() {
     }
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "safe":
+        return "✔";
+      case "malicious":
+        return "✖";
+      case "suspicious":
+        return "⚠";
+      default:
+        return "●";
+    }
+  };
+
   const getThreatLevel = (score: number) => {
     if (score >= 70)
       return { level: "Critical", color: "bg-red-500/20 text-red-400" };
@@ -345,18 +403,15 @@ export default function EmailDetailPage() {
   const threatLevel = getThreatLevel(email.threatScore);
 
   return (
-    <div className="bg-black min-h-screen text-white p-4 sm:p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header with Back Button and Toggle */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+    <div className="bg-black min-h-screen text-white">
+      <div className="max-w-6xl mx-auto">
+        {/* Header - Gmail Style Compact */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[#1E1E1E] bg-[#151515]">
           <button
-            onClick={() => {
-              console.log('Going back to inbox');
-              router.push('/home');
-            }}
-            className="flex items-center gap-2 text-white hover:text-white transition-colors"
+            onClick={() => router.push('/home')}
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -364,150 +419,148 @@ export default function EmailDetailPage() {
                 d="M10 19l-7-7m0 0l7-7m-7 7h18"
               />
             </svg>
-            <span>Back to Inbox</span>
+            <span>Back</span>
           </button>
-
-          <button
-            onClick={() => setShowAnalysis(!showAnalysis)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#151515] hover:bg-[#1E1E1E] rounded-lg transition-colors border border-[#1E1E1E]"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            <span>{showAnalysis ? "Hide" : "Show"} Analysis</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {email.threatLevel !== 'safe' && (
+              <button
+                onClick={handleMarkAsSafe}
+                disabled={isMarkingSafe || isWhitelisted}
+                className={`${isWhitelisted 
+                  ? 'text-gray-500 cursor-not-allowed' 
+                  : 'text-green-400 hover:text-green-300'
+                } px-2 py-1 text-xs transition-colors disabled:opacity-50`}
+              >
+                {isMarkingSafe ? 'Marking...' : isWhitelisted ? 'Safe' : 'Mark Safe'}
+              </button>
+            )}
+            <button onClick={handleStar} className="p-1.5 hover:bg-[#1E1E1E] rounded transition-colors">
+              <svg
+                className={`w-4 h-4 ${email.isStarred ? 'text-yellow-400 fill-yellow-400' : 'text-gray-400'}`}
+                fill={email.isStarred ? "currentColor" : "none"}
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                />
+              </svg>
+            </button>
+            <button
+              onClick={() => setShowAnalysis(!showAnalysis)}
+              className="px-2 py-1 text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              {showAnalysis ? "Hide" : "Show"} Analysis
+            </button>
+          </div>
         </div>
 
-        <div
-          className={`grid gap-6 ${showAnalysis ? "grid-cols-1 lg:grid-cols-3" : "grid-cols-1"}`}
-        >
-          {/* Email Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Email Header */}
-            <div className="bg-[#151515] rounded-xl p-4 sm:p-6 border border-[#1E1E1E]">
-              <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-4">
-                <div className="flex-1">
-                  <h1 className="text-2xl font-bold mb-2">{email.subject}</h1>
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className={`text-sm font-medium ${getStatusColor(email.threatLevel)}`}>
-                      {email.threatLevel.charAt(0).toUpperCase() + email.threatLevel.slice(1)}
+        <div className={`flex gap-4 ${showAnalysis ? "lg:flex-row" : ""}`}>
+          {/* Email Content - Gmail Style */}
+          <div className={`flex-1 ${showAnalysis ? "lg:max-w-3xl" : ""}`}>
+            {/* Subject - Gmail Style */}
+            <div className="px-4 py-3 border-b border-[#1E1E1E]">
+              <h1 className="text-xl font-normal text-white mb-2">{email.subject || "(No subject)"}</h1>
+              <div className="flex items-center gap-2 flex-wrap text-xs text-gray-400">
+                <span className={`${getStatusColor(email.threatLevel)}`}>
+                  {getStatusIcon(email.threatLevel)} {email.threatLevel.charAt(0).toUpperCase() + email.threatLevel.slice(1)}
+                </span>
+                <span>•</span>
+                <span>{new Date(email.receivedAt).toLocaleString()}</span>
+                {email.analysis?.authorizedSender && (
+                  <>
+                    <span>•</span>
+                    <span className="text-green-400">Verified sender</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Sender Info - Gmail Style Compact */}
+            <div className="px-4 py-3 border-b border-[#1E1E1E]">
+              <div className="flex items-start gap-3">
+                {(() => {
+                  const senderName = email.from.split("<")[0].trim() || email.from;
+                  const senderEmail = email.from.match(/<([^>]+)>/)?.[1] || email.from;
+                  const initials = senderName
+                    .split(' ')
+                    .filter((n: string) => n.length > 0)
+                    .map((n: string) => n[0])
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2) || senderEmail.charAt(0).toUpperCase();
+                  
+                  // Generate consistent color based on sender email
+                  const colors = [
+                    'from-blue-500 to-cyan-500',
+                    'from-purple-500 to-pink-500',
+                    'from-green-500 to-emerald-500',
+                    'from-orange-500 to-red-500',
+                    'from-indigo-500 to-blue-500',
+                    'from-pink-500 to-rose-500',
+                    'from-teal-500 to-cyan-500',
+                    'from-yellow-500 to-orange-500',
+                  ];
+                  const colorIndex = senderEmail.charCodeAt(0) % colors.length;
+                  const colorClass = colors[colorIndex];
+                  
+                  return (
+                    <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${colorClass} flex items-center justify-center text-white text-xs font-medium flex-shrink-0`}>
+                      {initials}
+                    </div>
+                  );
+                })()}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <p className="font-medium text-sm text-white">
+                      {email.from.split("<")[0].trim() || email.from}
+                    </p>
+                    <span className="text-xs text-gray-400 hidden sm:inline">
+                      &lt;{email.from.match(/<([^>]+)>/)?.[1] || email.from}&gt;
                     </span>
-                    <span className="text-white text-sm">
-                      | {new Date(email.receivedAt).toLocaleString()}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-400">
+                      to me
                     </span>
-                    {email.analysis?.authorizedSender && (
-                      <span className="ml-0 sm:ml-2 inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-green-500/15 text-green-400 border border-green-500/30">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        Authorized sender{email.analysis?.authorizedBrand ? `: ${email.analysis.authorizedBrand}` : ''}
-                      </span>
+                    {email.threatFlags && email.threatFlags.length > 0 && (
+                      <>
+                        <span className="text-xs text-gray-500">•</span>
+                        <div className="flex flex-wrap gap-1">
+                          {email.threatFlags.slice(0, 2).map((tag: string, index: number) => (
+                            <span
+                              key={index}
+                              className={`px-1.5 py-0.5 text-xs rounded ${
+                                tag === 'Whitelisted sender' 
+                                  ? 'bg-green-900/30 text-green-400' 
+                                  : 'bg-red-900/30 text-red-400'
+                              }`}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </>
                     )}
                   </div>
-                  {email.threatFlags && email.threatFlags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {email.threatFlags.map((tag: string, index: number) => (
-                        <span
-                          key={index}
-                          className={`px-2 py-1 text-xs rounded ${
-                            tag === 'Whitelisted sender' 
-                              ? 'bg-green-900/30 text-green-400' 
-                              : 'bg-red-900/30 text-red-400'
-                          }`}
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* Only show "Mark as Safe" button if email is not already safe */}
-                  {email.threatLevel !== 'safe' && (
-                    <button
-                      onClick={handleMarkAsSafe}
-                      disabled={isMarkingSafe || isWhitelisted}
-                      className={`${isWhitelisted 
-                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                        : 'bg-green-600 hover:bg-green-700 text-white'
-                      } px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
-                    >
-                      {isMarkingSafe ? (
-                        <>
-                          <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                          Marking...
-                        </>
-                      ) : isWhitelisted ? (
-                        <>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Marked as Safe
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Mark as Safe
-                        </>
-                      )}
-                    </button>
-                  )}
-                  <button onClick={handleStar} className="text-white hover:text-white flex-shrink-0">
-                    <svg
-                      className="w-6 h-6"
-                      fill={email.isStarred ? "currentColor" : "none"}
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#1E1E1E] rounded-full flex items-center justify-center">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium">{email.from.split("<")[0].trim()}</p>
-                  <p className="text-sm text-white">{email.from}</p>
                 </div>
               </div>
             </div>
 
-            {/* Message Content with image handling */}
-            <div className="bg-[#151515] rounded-xl p-4 sm:p-6 border border-[#1E1E1E]">
-              <div className="max-w-none break-words">
+            {/* Message Content - Gmail Style */}
+            <div className="px-4 py-4">
+              <div className="max-w-none break-words text-sm text-white leading-relaxed">
                 {email.htmlBody ? (
                   <div
-                    className="overflow-x-auto email-content"
-                    style={{ color: '#ffffff' }}
+                    className="overflow-x-auto email-content bg-black"
+                    style={{ 
+                      color: '#ffffff',
+                      backgroundColor: '#000000',
+                      minHeight: '100px'
+                    }}
                     dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(email.htmlBody) }}
                     onClick={(e) => {
                       const target = e.target as HTMLElement;
@@ -520,7 +573,8 @@ export default function EmailDetailPage() {
                   />
                 ) : (
                   <div 
-                    className="overflow-x-auto text-white"
+                    className="overflow-x-auto text-white whitespace-pre-wrap bg-black"
+                    style={{ backgroundColor: '#000000' }}
                     dangerouslySetInnerHTML={{ __html: linkifyText(email.body) }}
                     onClick={(e) => {
                       const target = e.target as HTMLElement;
@@ -535,28 +589,47 @@ export default function EmailDetailPage() {
               </div>
             </div>
 
-            {/* Reply Section */}
-            <div className="bg-[#151515] rounded-xl border border-[#1E1E1E]">
+            {/* Reply Section - Gmail Style */}
+            <div className="px-4 py-4 border-t border-[#1E1E1E] mt-4">
               {!showReplyBox ? (
-                <button
-                  onClick={() => setShowReplyBox(true)}
-                  className="w-full p-4 flex items-center gap-3 text-white hover:bg-[#1E1E1E] transition-colors rounded-xl"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-                    />
-                  </svg>
-                  <span>Reply</span>
-                </button>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setShowReplyBox(true)}
+                    className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors px-3 py-1.5 rounded hover:bg-[#1E1E1E]"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+                      />
+                    </svg>
+                    <span>Reply</span>
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors px-3 py-1.5 rounded hover:bg-[#1E1E1E]"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                    <span>Delete</span>
+                  </button>
+                </div>
               ) : (
-                <div className="p-4 sm:p-6 rounded-xl">
-                  {/* Reply Header */}
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Reply</h3>
+                <div className="mt-3">
+                  {/* Reply Header - Gmail Style */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-400">To:</span>
+                      <span className="text-white">{email.from}</span>
+                    </div>
                     <button
                       onClick={() => {
                         setShowReplyBox(false);
@@ -565,9 +638,9 @@ export default function EmailDetailPage() {
                         setBcc("");
                         setShowCcBcc(false);
                       }}
-                      className="text-white hover:text-white"
+                      className="text-gray-400 hover:text-white p-1"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -578,38 +651,30 @@ export default function EmailDetailPage() {
                     </button>
                   </div>
 
-                  {/* To Field */}
-                  <div className="mb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white text-sm w-12">To:</span>
-                      <span className="text-white text-sm">{email.from}</span>
-                    </div>
-                  </div>
-
-                  {/* Cc/Bcc Fields */}
+                  {/* Cc/Bcc Fields - Gmail Style */}
                   {showCcBcc && (
                     <>
-                      <div className="mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white text-sm w-12">Cc:</span>
+                      <div className="mb-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-gray-400 w-8">Cc:</span>
                           <input
                             type="text"
                             value={cc}
                             onChange={(e) => setCc(e.target.value)}
                             placeholder="Cc recipients"
-                            className="flex-1 bg-black border border-[#1E1E1E] rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-white"
+                            className="flex-1 bg-transparent border-b border-[#1E1E1E] px-1 py-1 text-white text-sm focus:outline-none focus:border-white"
                           />
                         </div>
                       </div>
-                      <div className="mb-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white text-sm w-12">Bcc:</span>
+                      <div className="mb-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-gray-400 w-8">Bcc:</span>
                           <input
                             type="text"
                             value={bcc}
                             onChange={(e) => setBcc(e.target.value)}
                             placeholder="Bcc recipients"
-                            className="flex-1 bg-black border border-[#1E1E1E] rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-white"
+                            className="flex-1 bg-transparent border-b border-[#1E1E1E] px-1 py-1 text-white text-sm focus:outline-none focus:border-white"
                           />
                         </div>
                       </div>
@@ -647,40 +712,42 @@ export default function EmailDetailPage() {
                     </div>
                   </div>
 
-                  {/* Reply Body */}
-                  <div className="mb-4">
+                  {/* Reply Body - Gmail Style */}
+                  <div className="mb-3">
                     <textarea
                       value={replyBody}
                       onChange={(e) => handleReplyTextChange(e.target.value)}
                       placeholder="Type your reply or use # to generate with AI..."
                       disabled={isGeneratingAI}
-                      className="w-full bg-black border border-[#1E1E1E] rounded-lg px-4 py-3 text-white min-h-[200px] focus:outline-none focus:border-white resize-none disabled:opacity-50"
+                      className="w-full bg-transparent border border-[#1E1E1E] rounded px-3 py-2 text-white text-sm min-h-[120px] focus:outline-none focus:border-white resize-none disabled:opacity-50"
                     />
                     {isGeneratingAI && (
                       <div className="flex items-center gap-2 mt-2 text-blue-400 text-sm">
-                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
+                        <div className="flex gap-1">
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                        </div>
                         <span>Generating AI reply...</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Action Buttons */}
+                  {/* Action Buttons - Gmail Style */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handleSendReply}
                         disabled={isSendingReply || isGeneratingAI || !replyBody.trim()}
-                        className="bg-white text-black px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="bg-white text-black px-4 py-1.5 rounded text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isSendingReply ? (
                           <span className="flex items-center gap-2">
-                            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
+                            <div className="flex gap-0.5">
+                              <div className="w-1.5 h-1.5 bg-black rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                              <div className="w-1.5 h-1.5 bg-black rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                              <div className="w-1.5 h-1.5 bg-black rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                            </div>
                             Sending...
                           </span>
                         ) : (
@@ -690,25 +757,11 @@ export default function EmailDetailPage() {
                       {!showCcBcc && (
                         <button
                           onClick={() => setShowCcBcc(true)}
-                          className="text-white hover:text-white text-sm px-3 py-2"
+                          className="text-gray-400 hover:text-white text-xs px-2 py-1"
                         >
                           Cc/Bcc
                         </button>
                       )}
-                    </div>
-
-                    {/* Formatting Options */}
-                    <div className="flex items-center gap-2">
-                      <button className="p-2 text-white hover:bg-[#1E1E1E] rounded transition-colors">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                        </svg>
-                      </button>
-                      <button className="p-2 text-white hover:bg-[#1E1E1E] rounded transition-colors">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -716,12 +769,12 @@ export default function EmailDetailPage() {
             </div>
           </div>
 
-          {/* Threat Analysis Sidebar */}
+          {/* Threat Analysis Sidebar - Gmail Style Compact */}
           {showAnalysis && email.analysis && (
-            <div className="space-y-6">
+            <div className="hidden lg:block w-64 flex-shrink-0 space-y-4 pt-3">
               {/* AI Summary */}
-              <div className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E]">
-                <h2 className="text-lg font-semibold mb-2">AI Summary</h2>
+              <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
+                <h2 className="text-sm font-semibold mb-2">AI Summary</h2>
                 {email.analysis.aiSummary ? (
                   <p className="text-sm text-white/80 leading-relaxed">
                     {email.analysis.aiSummary}
@@ -729,7 +782,11 @@ export default function EmailDetailPage() {
                 ) : (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-1.5 bg-white/60 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                        <div className="w-1.5 h-1.5 bg-white/60 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-1.5 h-1.5 bg-white/60 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                      </div>
                       <p className="text-sm text-white/60">Generating AI summary...</p>
                     </div>
                     <button
@@ -755,8 +812,8 @@ export default function EmailDetailPage() {
                 )}
               </div>
               {/* Threat Score */}
-              <div className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E]">
-                <h2 className="text-lg font-semibold mb-4">Threat Assessment</h2>
+              <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
+                <h2 className="text-sm font-semibold mb-3">Threat Assessment</h2>
                 <div className={`${threatLevel.color} rounded-lg p-4 text-center mb-4`}>
                   <p className="text-sm mb-2">Threat Level</p>
                   <p className="text-2xl font-bold">{threatLevel.level}</p>
@@ -768,8 +825,8 @@ export default function EmailDetailPage() {
               </div>
 
               {/* Email Authentication */}
-              <div className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E]">
-                <h2 className="text-lg font-semibold mb-4">Email Authentication</h2>
+              <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
+                <h2 className="text-sm font-semibold mb-3">Email Authentication</h2>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
                     <span>SPF Check:</span>
@@ -800,8 +857,8 @@ export default function EmailDetailPage() {
 
               {/* Link Analysis */}
               {email.analysis && (
-                <div className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E]">
-                  <h2 className="text-lg font-semibold mb-4">Link Analysis</h2>
+                <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
+                  <h2 className="text-sm font-semibold mb-3">Link Analysis</h2>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm">
                       <span>Total Links:</span>
@@ -825,8 +882,8 @@ export default function EmailDetailPage() {
 
               {/* Content Flags */}
               {email.analysis && email.analysis.aiReasoningFlags && (
-                <div className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E]">
-                  <h2 className="text-lg font-semibold mb-4">AI Analysis Flags</h2>
+                <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
+                  <h2 className="text-sm font-semibold mb-3">AI Analysis Flags</h2>
                   <div className="flex flex-wrap gap-2">
                     {email.analysis.aiReasoningFlags.map((flag: string, index: number) => (
                       <span
@@ -842,8 +899,8 @@ export default function EmailDetailPage() {
 
               {/* AI Confidence */}
               {email.analysis && (
-                <div className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E]">
-                  <h2 className="text-lg font-semibold mb-4">AI Analysis</h2>
+                <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
+                  <h2 className="text-sm font-semibold mb-3">AI Analysis</h2>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm">
                       <span>AI Prediction:</span>
@@ -864,8 +921,8 @@ export default function EmailDetailPage() {
               )}
 
               {/* Actions */}
-              <div className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E]">
-                <h2 className="text-lg font-semibold mb-4">Actions</h2>
+              <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
+                <h2 className="text-sm font-semibold mb-3">Actions</h2>
                 <div className="space-y-3">
                   {email.quarantine && (
                     <button
@@ -1010,20 +1067,49 @@ function sanitizeEmailHtml(html: string): string {
       return false;
     };
     
+    // Force body and main containers to have dark background first
+    if (doc.body) {
+      doc.body.style.backgroundColor = '#000000';
+      doc.body.style.color = '#ffffff';
+    }
+    
     // Force all text to be visible in dark mode (like Gmail)
     doc.querySelectorAll('*').forEach((el: any) => {
       // Skip links - we handle them separately
       if (el.tagName === 'A') return;
       
       const bgColor = el.style.backgroundColor || el.getAttribute('bgcolor');
-      const textColor = el.style.color || el.getAttribute('color');
+      const computedStyle = typeof window !== 'undefined' ? window.getComputedStyle(el) : null;
+      const computedBgColor = computedStyle ? computedStyle.backgroundColor : null;
+      const finalBgColor = bgColor || computedBgColor;
       
-      // If element has a light background, make text dark
-      if (bgColor && isLightColor(bgColor)) {
-        el.style.color = '#000000 !important';
-        el.style.setProperty('color', '#000000', 'important');
+      // If element has a light background, make background dark and text light
+      if (finalBgColor && isLightColor(finalBgColor)) {
+        el.style.backgroundColor = '#1a1a1a !important';
+        el.style.setProperty('background-color', '#1a1a1a', 'important');
+        el.style.color = '#ffffff !important';
+        el.style.setProperty('color', '#ffffff', 'important');
       } else {
-        // For all other elements, force text to be white (dark mode)
+        // For all other elements, ensure text is white
+        // Only set transparent background if it's explicitly set
+        if (finalBgColor && (finalBgColor === 'transparent' || finalBgColor === 'rgba(0, 0, 0, 0)')) {
+          el.style.backgroundColor = 'transparent';
+        }
+        el.style.color = '#ffffff !important';
+        el.style.setProperty('color', '#ffffff', 'important');
+      }
+    });
+    
+    // Handle table cells and other elements that might have white backgrounds
+    doc.querySelectorAll('td, th, div, p, span, table, section, article').forEach((el: any) => {
+      const bgColor = el.style.backgroundColor || el.getAttribute('bgcolor');
+      const computedStyle = typeof window !== 'undefined' ? window.getComputedStyle(el) : null;
+      const computedBgColor = computedStyle ? computedStyle.backgroundColor : null;
+      const finalBgColor = bgColor || computedBgColor;
+      
+      if (finalBgColor && isLightColor(finalBgColor)) {
+        el.style.backgroundColor = '#1a1a1a !important';
+        el.style.setProperty('background-color', '#1a1a1a', 'important');
         el.style.color = '#ffffff !important';
         el.style.setProperty('color', '#ffffff', 'important');
       }

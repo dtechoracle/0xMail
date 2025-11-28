@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
             spfResult: parsedEmail.spfResult,
             dkimResult: parsedEmail.dkimResult,
             dmarcResult: parsedEmail.dmarcResult,
-          });
+          }, user.id);
         } catch (error) {
           console.error('Scan error for email:', email.id, error);
         }
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
           spfResult: parsedEmail.spfResult,
           dkimResult: parsedEmail.dkimResult,
           dmarcResult: parsedEmail.dmarcResult,
-        }).catch((error) => {
+        }, user.id).catch((error) => {
           console.error('Scan error for email:', email.id, error);
         });
       }

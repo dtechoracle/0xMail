@@ -34,6 +34,110 @@ export interface EmailScanResult {
 }
 
 /**
+ * Check if an email is impersonating a previously contacted email
+ * Compares the current sender email against emails the user has interacted with
+ */
+async function checkEmailImpersonation(
+  userId: string,
+  currentFrom: string
+): Promise<{
+  isImpersonation: boolean;
+  originalEmail?: string;
+  suspiciousEmail?: string;
+  similarity?: number;
+}> {
+  try {
+    // Extract email address from "Name <email@domain.com>" format
+    const currentEmailMatch = currentFrom.match(/<([^>]+)>/) || [null, currentFrom];
+    const currentEmail = currentEmailMatch[1] || currentFrom;
+    const [currentLocal, currentDomain] = currentEmail.toLowerCase().split('@');
+    
+    if (!currentDomain) {
+      return { isImpersonation: false };
+    }
+
+    // Get all emails the user has sent or received from (excluding current email)
+    const previousEmails = await prisma.email.findMany({
+      where: {
+        userId,
+        from: {
+          not: currentFrom,
+        },
+        OR: [
+          { isRead: true }, // User has read these emails
+          { isStarred: true }, // User has starred these emails
+        ],
+      },
+      select: {
+        from: true,
+      },
+      distinct: ['from'],
+      take: 100, // Limit to recent 100 unique senders
+    });
+
+    for (const prevEmail of previousEmails) {
+      const prevEmailMatch = prevEmail.from.match(/<([^>]+)>/) || [null, prevEmail.from];
+      const prevEmailAddr = prevEmailMatch[1] || prevEmail.from;
+      const [prevLocal, prevDomain] = prevEmailAddr.toLowerCase().split('@');
+
+      if (!prevDomain) continue;
+
+      // Check if domains are similar (lookalike detection)
+      const domainNorm1 = normalizeHomoglyphs(currentDomain);
+      const domainNorm2 = normalizeHomoglyphs(prevDomain);
+      
+      // If local parts match but domains are different and similar
+      if (currentLocal === prevLocal && currentDomain !== prevDomain) {
+        const domainDistance = levenshtein(domainNorm1, domainNorm2);
+        const maxLength = Math.max(domainNorm1.length, domainNorm2.length);
+        const similarity = 1 - (domainDistance / maxLength);
+
+        // If domains are very similar (85%+ similarity) but not identical, it's likely impersonation
+        if (similarity >= 0.85 && domainDistance <= 2) {
+          return {
+            isImpersonation: true,
+            originalEmail: prevEmailAddr,
+            suspiciousEmail: currentEmail,
+            similarity,
+          };
+        }
+      }
+
+      // Check if domains are similar even if local parts differ slightly
+      if (currentDomain !== prevDomain) {
+        const domainDistance = levenshtein(domainNorm1, domainNorm2);
+        const maxLength = Math.max(domainNorm1.length, domainNorm2.length);
+        const similarity = 1 - (domainDistance / maxLength);
+
+        // Very similar domains (90%+ similarity) with small edit distance
+        if (similarity >= 0.90 && domainDistance <= 1) {
+          // Also check if local parts are similar
+          const localNorm1 = normalizeHomoglyphs(currentLocal);
+          const localNorm2 = normalizeHomoglyphs(prevLocal);
+          const localDistance = levenshtein(localNorm1, localNorm2);
+          const localMaxLength = Math.max(localNorm1.length, localNorm2.length);
+          const localSimilarity = localMaxLength > 0 ? 1 - (localDistance / localMaxLength) : 0;
+
+          if (localSimilarity >= 0.8 || localDistance <= 1) {
+            return {
+              isImpersonation: true,
+              originalEmail: prevEmailAddr,
+              suspiciousEmail: currentEmail,
+              similarity: (similarity + localSimilarity) / 2,
+            };
+          }
+        }
+      }
+    }
+
+    return { isImpersonation: false };
+  } catch (error) {
+    console.error('Error checking email impersonation:', error);
+    return { isImpersonation: false };
+  }
+}
+
+/**
  * Scan an email for threats using AI
  */
 export async function scanEmail(
@@ -46,7 +150,8 @@ export async function scanEmail(
     spfResult?: string;
     dkimResult?: string;
     dmarcResult?: string;
-  }
+  },
+  userId: string
 ): Promise<EmailScanResult> {
   try {
     console.log('Starting email scan for:', emailId);
@@ -67,8 +172,14 @@ export async function scanEmail(
     const aiAnalysis = await analyzeWithAI(emailData);
     console.log('AI analysis result:', aiAnalysis);
 
+    // Check for email impersonation (compare against previously contacted emails)
+    const impersonationCheck = await checkEmailImpersonation(userId, emailData.from);
+    if (impersonationCheck.isImpersonation) {
+      console.log('Email impersonation detected:', impersonationCheck);
+    }
+
     // Perform heuristic checks
-    const heuristicAnalysis = performHeuristicAnalysis(emailData, links);
+    const heuristicAnalysis = await performHeuristicAnalysis(emailData, links, impersonationCheck);
 
     // Combine results
     const threatFlags: string[] = [];
@@ -89,9 +200,20 @@ export async function scanEmail(
       threatScore += 40;
     }
 
+    // Email impersonation detection
+    if (impersonationCheck.isImpersonation) {
+      threatFlags.push(`Email impersonation detected: ${impersonationCheck.originalEmail} vs ${impersonationCheck.suspiciousEmail}`);
+      threatScore += 60; // High threat score for impersonation
+    }
+
     if (heuristicAnalysis.lookalikeOfBrand) {
       threatFlags.push(`Domain looks like ${heuristicAnalysis.lookalikeOfBrand}`);
       threatScore += 50;
+    }
+
+    if (heuristicAnalysis.isNewDomain) {
+      threatFlags.push('Newly registered domain (within 30 days)');
+      threatScore += 25;
     }
 
     // If links reference a well-known brand but sender domain doesn't match, raise score
@@ -346,13 +468,15 @@ async function analyzeWithAI(emailData: {
       throw new Error('OpenAI API key not configured');
     }
     
-    const prompt = `Analyze this email for phishing and security threats. Return a compact JSON as specified below.
+    const prompt = `You are a professional email security analyst. Analyze this email for genuine phishing and security threats with high precision. Only flag legitimate security concerns - avoid false positives that could alarm users unnecessarily.
 
 From: ${emailData.from}
 Subject: ${emailData.subject}
 Body: ${emailData.body.substring(0, 2000)}
 
-Check and include any of the following indicators in reasoningFlags (use these exact phrases when applicable):
+IMPORTANT: Be conservative and professional. Only flag actual threats, not normal business communications or legitimate links. Links to well-known domains (google.com, microsoft.com, linkedin.com, etc.) are generally safe unless there are clear signs of spoofing.
+
+Check and include any of the following indicators in reasoningFlags ONLY if they are genuinely suspicious (use these exact phrases when applicable):
 
 Sender & Metadata:
 - "Display name spoofing"
@@ -372,14 +496,17 @@ Content Indicators:
 - "Brand impersonation"
 - "Tone mismatch with prior communications"
 
-Links & Attachments:
-- "Shortened URL"
-- "Link redirect chain"
-- "Non-HTTPS link"
-- "IP-address link"
-- "Newly-registered domain"
-- "Attachment with script/executable"
-- "Encoded/encrypted attachment"
+Links & Attachments (ONLY flag if genuinely suspicious):
+- "Shortened URL" (only if combined with other suspicious indicators)
+- "Link redirect chain" (multiple redirects to unknown domains)
+- "Non-HTTPS link" (only if requesting sensitive information)
+- "IP-address link" (direct IP instead of domain)
+- "Newly-registered domain" (domain registered within last 30 days AND requesting sensitive info)
+- "Suspicious domain spoofing" (lookalike of trusted brand)
+- "Attachment with script/executable" (only actual executables, not normal files)
+- "Encoded/encrypted attachment" (only if unexpected)
+
+NOTE: Do NOT flag legitimate links to well-known domains (google.com, microsoft.com, linkedin.com, github.com, mixlr.com, etc.) or their subdomains unless there is clear evidence of spoofing or domain manipulation. Subdomains of trusted domains (e.g., "user.mixlrmail.com") are generally safe.
 
 Technical & Headers:
 - "Missing/mismatched headers"
@@ -475,9 +602,10 @@ Respond ONLY with JSON object:
 /**
  * Perform heuristic analysis
  */
-function performHeuristicAnalysis(
+async function performHeuristicAnalysis(
   emailData: { from: string; subject: string; body: string },
-  links: string[]
+  links: string[],
+  impersonationCheck?: { isImpersonation: boolean; originalEmail?: string; suspiciousEmail?: string; similarity?: number }
 ) {
   const urgentKeywords = [
     'urgent',
@@ -528,6 +656,24 @@ function performHeuristicAnalysis(
   const hasSpoofedDomain = checkDomainSpoofing(emailData.from);
   const lookalikeOfBrand = detectLookalikeBrand(senderDomain);
 
+  // Check domain registration date (if domain is new, it's more suspicious)
+  // Skip checking for trusted/popular domains to avoid false positives
+  let isNewDomain = false;
+  if (senderDomain) {
+    const popularDomains = ['google.com', 'microsoft.com', 'linkedin.com', 'github.com', 'amazon.com', 'apple.com', 'facebook.com', 'twitter.com', 'gmail.com', 'outlook.com', 'yahoo.com'];
+    const isPopularDomain = popularDomains.some((td: string) => senderDomain.includes(td));
+    
+    if (!isPopularDomain) {
+      try {
+        const domainCheck = await checkDomainRegistrationDate(senderDomain);
+        isNewDomain = domainCheck.isNewDomain || false;
+      } catch (error) {
+        console.error('Error checking domain registration:', error);
+        // Fail silently to avoid blocking email scanning
+      }
+    }
+  }
+
   // Analyze links
   const { suspicious, phishing, malicious, nonHttps, shortened, brands } = analyzeLinks(links);
 
@@ -537,6 +683,7 @@ function performHeuristicAnalysis(
     hasSpoofedDomain,
     hasSuspiciousAttachment: false, // TODO: Implement attachment scanning
     hasGenericGreeting,
+    isNewDomain,
     totalLinks: links.length,
     suspiciousLinks: suspicious.length,
     phishingLinks: phishing.length,
@@ -597,23 +744,139 @@ function analyzeLinks(links: string[]) {
   const suspiciousTLDs = ['.xyz', '.tk', '.ml', '.ga', '.cf'];
   const phishingKeywords = ['login', 'verify', 'account', 'secure', 'update'];
   const shorteners = ['bit.ly', 't.co', 'tinyurl.com', 'goo.gl', 'rebrand.ly'];
+  // Expanded list of trusted/popular domains
   const trustedBrandDomains = Object.keys({
+    // Tech & Cloud
     'linkedin.com': 'LinkedIn',
     'google.com': 'Google',
     'github.com': 'GitHub',
     'microsoft.com': 'Microsoft',
-    'paypal.com': 'PayPal',
-    'amazon.com': 'Amazon',
     'apple.com': 'Apple',
-    'stripe.com': 'Stripe',
+    'amazon.com': 'Amazon',
+    'aws.amazon.com': 'AWS',
+    'facebook.com': 'Facebook',
+    'meta.com': 'Meta',
+    'twitter.com': 'Twitter',
+    'x.com': 'X',
+    'instagram.com': 'Instagram',
+    'youtube.com': 'YouTube',
+    'netflix.com': 'Netflix',
+    'spotify.com': 'Spotify',
+    'discord.com': 'Discord',
+    'reddit.com': 'Reddit',
+    'stackoverflow.com': 'Stack Overflow',
+    'stackexchange.com': 'Stack Exchange',
+    'medium.com': 'Medium',
+    'notion.so': 'Notion',
+    'dropbox.com': 'Dropbox',
+    'box.com': 'Box',
+    'onedrive.com': 'OneDrive',
+    'icloud.com': 'iCloud',
+    'zoom.us': 'Zoom',
+    'teams.microsoft.com': 'Microsoft Teams',
     'slack.com': 'Slack',
     'atlassian.com': 'Atlassian',
-    'facebook.com': 'Facebook',
+    'jira.com': 'Jira',
+    'confluence.com': 'Confluence',
+    'trello.com': 'Trello',
+    'asana.com': 'Asana',
+    'monday.com': 'Monday',
+    'salesforce.com': 'Salesforce',
+    'hubspot.com': 'HubSpot',
+    'zendesk.com': 'Zendesk',
+    'stripe.com': 'Stripe',
+    'paypal.com': 'PayPal',
+    'square.com': 'Square',
+    'shopify.com': 'Shopify',
+    'etsy.com': 'Etsy',
+    'ebay.com': 'eBay',
+    'airbnb.com': 'Airbnb',
+    'uber.com': 'Uber',
+    'lyft.com': 'Lyft',
+    'doordash.com': 'DoorDash',
+    'grubhub.com': 'Grubhub',
+    // Banking & Finance
+    'chase.com': 'Chase',
+    'bankofamerica.com': 'Bank of America',
+    'wellsfargo.com': 'Wells Fargo',
+    'citi.com': 'Citi',
+    'capitalone.com': 'Capital One',
+    'americanexpress.com': 'American Express',
+    'visa.com': 'Visa',
+    'mastercard.com': 'Mastercard',
+    // News & Media
+    'cnn.com': 'CNN',
+    'bbc.com': 'BBC',
+    'nytimes.com': 'New York Times',
+    'washingtonpost.com': 'Washington Post',
+    'theguardian.com': 'The Guardian',
+    'reuters.com': 'Reuters',
+    'bloomberg.com': 'Bloomberg',
+    'wsj.com': 'Wall Street Journal',
+    // Education
+    'coursera.org': 'Coursera',
+    'udemy.com': 'Udemy',
+    'edx.org': 'edX',
+    'khanacademy.org': 'Khan Academy',
+    // Government & Official
+    'irs.gov': 'IRS',
+    'usps.com': 'USPS',
+    'fedex.com': 'FedEx',
+    'ups.com': 'UPS',
+    'dhl.com': 'DHL',
+    // Email Providers
+    'gmail.com': 'Gmail',
+    'outlook.com': 'Outlook',
+    'yahoo.com': 'Yahoo',
+    'protonmail.com': 'ProtonMail',
+    'mail.com': 'Mail.com',
+    // Job Sites
+    'indeed.com': 'Indeed',
+    'glassdoor.com': 'Glassdoor',
+    'monster.com': 'Monster',
+    'careerbuilder.com': 'CareerBuilder',
+    // Other Popular
+    'wikipedia.org': 'Wikipedia',
+    'imdb.com': 'IMDb',
+    'pinterest.com': 'Pinterest',
+    'tumblr.com': 'Tumblr',
+    'flickr.com': 'Flickr',
+    'twitch.tv': 'Twitch',
+    'tiktok.com': 'TikTok',
+    'snapchat.com': 'Snapchat',
+    // Audio/Streaming Platforms
+    'mixlrmail.com': 'Mixlr',
+    'soundcloud.com': 'SoundCloud',
+    'anchor.fm': 'Anchor',
+    'podbean.com': 'Podbean',
   });
 
   for (const link of links) {
     try {
       const url = new URL(link);
+
+      // First, check if this is a trusted domain/subdomain - if so, skip most checks
+      const hostNorm = normalizeHomoglyphs(url.hostname);
+      const isTrustedDomain = trustedBrandDomains.some((td) => {
+        const tNorm = normalizeHomoglyphs(td);
+        // Match exact domain or subdomain (e.g., "apostlemuyiwaareo.mixlrmail.com" matches "mixlrmail.com")
+        return hostNorm === tNorm || hostNorm.endsWith('.' + tNorm);
+      });
+
+      // If it's a trusted domain, skip phishing checks entirely
+      if (isTrustedDomain) {
+        // Still check for brand recognition
+        for (const td of trustedBrandDomains) {
+          const tNorm = normalizeHomoglyphs(td);
+          if (hostNorm === tNorm || hostNorm.endsWith('.' + tNorm)) {
+            const brand = getAuthorizedBrand(td);
+            if (brand) brands.push(brand);
+            break;
+          }
+        }
+        // Skip to next link - trusted domains are safe
+        continue;
+      }
 
       if (url.protocol !== 'https:') {
         nonHttps += 1;
@@ -629,9 +892,25 @@ function analyzeLinks(links: string[]) {
         suspicious.push(link);
       }
 
-      // Check for phishing keywords
-      if (phishingKeywords.some((keyword) => link.toLowerCase().includes(keyword))) {
-        phishing.push(link);
+      // Check for phishing keywords - only flag if combined with suspicious patterns
+      // Don't flag legitimate links that just happen to contain common words
+      const linkLower = link.toLowerCase();
+      const hasPhishingKeyword = phishingKeywords.some((keyword) => linkLower.includes(keyword));
+      
+      // Only flag as phishing if:
+      // 1. Has phishing keyword AND suspicious TLD, OR
+      // 2. Has phishing keyword AND is shortened URL, OR
+      // 3. Has phishing keyword AND uses IP address, OR
+      // 4. Has phishing keyword AND domain doesn't match trusted brands
+      if (hasPhishingKeyword) {
+        const isSuspiciousTLD = suspiciousTLDs.some((tld) => url.hostname.endsWith(tld));
+        const isShortened = shorteners.some((s) => url.hostname.endsWith(s));
+        const isIPAddress = /\d+\.\d+\.\d+\.\d+/.test(url.hostname);
+        
+        // Only flag if it's actually suspicious, not just because it has a common word
+        if (isSuspiciousTLD || isShortened || isIPAddress) {
+          phishing.push(link);
+        }
       }
 
       // Check for IP addresses instead of domains
@@ -639,19 +918,15 @@ function analyzeLinks(links: string[]) {
         malicious.push(link);
       }
 
-      // Check for brand domains and lookalikes (homoglyphs)
-      const hostNorm = normalizeHomoglyphs(url.hostname);
+      // Check for brand domains and lookalikes (homoglyphs) - only for non-trusted domains
+      // (Trusted domains are already handled above)
       for (const td of trustedBrandDomains) {
         const tNorm = normalizeHomoglyphs(td);
-        if (hostNorm.includes(tNorm)) {
+        // Check for lookalikes (similar domains that might be spoofing)
+        const dist = levenshtein(hostNorm, tNorm);
+        if (dist > 0 && dist <= 2) {
           const brand = getAuthorizedBrand(td);
           if (brand) brands.push(brand);
-        } else {
-          const dist = levenshtein(hostNorm, tNorm);
-          if (dist > 0 && dist <= 2) {
-            const brand = getAuthorizedBrand(td);
-            if (brand) brands.push(brand);
-          }
         }
       }
     } catch (error) {
@@ -786,4 +1061,72 @@ function levenshtein(a: string, b: string): number {
   }
   return dp[m][n];
 }
+
+/**
+ * Check domain registration date (using WHOIS)
+ * Returns true if domain is newly registered (within last 30 days)
+ */
+async function checkDomainRegistrationDate(domain: string): Promise<{
+  isNewDomain: boolean;
+  registrationDate?: Date;
+  ageInDays?: number;
+}> {
+  try {
+    // Use whois package to check domain registration
+    const whois = require('whois');
+    
+    return new Promise((resolve) => {
+      whois.lookup(domain, (err: any, data: string) => {
+        if (err) {
+          console.error('WHOIS lookup error:', err);
+          resolve({ isNewDomain: false });
+          return;
+        }
+
+        try {
+          // Parse WHOIS data to find registration date
+          // Common patterns: "Creation Date:", "Registered On:", "Created:", etc.
+          const creationDateMatch = data.match(/(?:Creation Date|Registered On|Created|Registration Date):\s*(\d{4}-\d{2}-\d{2})/i) ||
+                                   data.match(/(?:Creation Date|Registered On|Created|Registration Date):\s*(\d{2}\/\d{2}\/\d{4})/i) ||
+                                   data.match(/(?:Creation Date|Registered On|Created|Registration Date):\s*(\d{2}-\d{2}-\d{4})/i);
+          
+          if (creationDateMatch) {
+            const dateStr = creationDateMatch[1];
+            let registrationDate: Date;
+            
+            // Parse different date formats
+            if (dateStr.includes('-')) {
+              registrationDate = new Date(dateStr);
+            } else if (dateStr.includes('/')) {
+              const [month, day, year] = dateStr.split('/');
+              registrationDate = new Date(`${year}-${month}-${day}`);
+            } else {
+              registrationDate = new Date(dateStr);
+            }
+
+            const now = new Date();
+            const ageInDays = Math.floor((now.getTime() - registrationDate.getTime()) / (1000 * 60 * 60 * 24));
+            const isNewDomain = ageInDays <= 30 && ageInDays >= 0;
+
+            resolve({
+              isNewDomain,
+              registrationDate,
+              ageInDays,
+            });
+          } else {
+            // If we can't find registration date, assume it's not new to avoid false positives
+            resolve({ isNewDomain: false });
+          }
+        } catch (parseError) {
+          console.error('Error parsing WHOIS data:', parseError);
+          resolve({ isNewDomain: false });
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error checking domain registration:', error);
+    return { isNewDomain: false };
+  }
+}
+
 

@@ -144,3 +144,8 @@ These require more setup but offer more control and scalability.
 **For other platforms or if you want more control:** Use **Supabase** (Option 2) or **Neon** (Option 3) - both have generous free tiers.
 
 
+
+
+
+
+

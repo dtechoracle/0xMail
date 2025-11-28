@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
         subject: parsedEmail.subject,
         body: parsedEmail.body,
         htmlBody: parsedEmail.htmlBody,
-      }).catch((error) => {
+      }, user.id).catch((error) => {
         console.error('Scan error for email:', email.id, error);
       });
 

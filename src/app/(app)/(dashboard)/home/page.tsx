@@ -40,14 +40,9 @@ export default function HomePage() {
   const [connectedAccounts, setConnectedAccounts] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Navigation handler function
+  // Navigation handler function - immediate redirect
   const handleEmailClick = (emailId: string) => {
-    console.log('Navigating to email:', emailId);
-    const targetUrl = `/home/${emailId}`;
-    console.log('Navigating to:', targetUrl);
-    
-    // Force navigation with window.location for maximum reliability
-    window.location.href = targetUrl;
+    router.push(`/home/${emailId}`);
   };
 
   useEffect(() => {
@@ -380,52 +375,59 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Emails Section */}
-        <div className="rounded-xl border border-[#1E1E1E]">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-b border-[#1E1E1E] bg-[#151515] gap-3">
-            <h2 className="text-xl font-semibold">Recent Emails</h2>
-            <div className="flex items-center gap-4">
+        {/* Emails Section - Gmail Style */}
+        <div className="bg-black border border-[#1E1E1E] rounded-lg overflow-hidden">
+          {/* Header - Gmail Style */}
+          <div className="flex items-center justify-between px-2 sm:px-4 py-2 border-b border-[#1E1E1E] bg-[#151515]">
+            <div className="flex items-center gap-2 flex-1">
               <button
                 onClick={() => { window.location.href = '/compose'; }}
-                className="bg-white text-black px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                className="bg-white text-black px-3 py-1.5 rounded text-sm font-medium hover:bg-gray-200 transition-colors"
               >
                 Compose
               </button>
-              <span className="text-sm text-white">
-                {emails.length} of {stats.totalProcessed}
-              </span>
               <button
                 onClick={() => syncEmails(false)}
                 disabled={isSyncing}
-                className="flex items-center gap-2 px-3 py-2 bg-black hover:bg-[#1E1E1E] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-1.5 hover:bg-[#1E1E1E] rounded transition-colors disabled:opacity-50"
+                title="Refresh"
               >
-                <svg
-                  className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                <span className="text-sm">{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+                {isSyncing ? (
+                  <div className="flex gap-1">
+                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                ) : (
+                  <svg
+                    className="w-5 h-5 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                )}
               </button>
             </div>
+            <span className="text-xs text-gray-400 hidden sm:block">
+              {emails.length} of {stats.totalProcessed}
+            </span>
           </div>
 
-          {/* Email List */}
-          <div className="divide-y divide-[#1E1E1E] bg-black">
+          {/* Email List - Gmail Style Compact */}
+          <div className="divide-y divide-[#1E1E1E]">
             {emails.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-white mb-4">No emails yet</p>
+                <p className="text-gray-400 mb-4">No emails yet</p>
                 <button
                   onClick={() => setShowAddEmailModal(true)}
-                  className="bg-white text-black px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                  className="bg-white text-black px-4 py-2 rounded text-sm font-medium hover:bg-gray-200 transition-colors"
                 >
                   Connect Email Account
                 </button>
@@ -439,62 +441,20 @@ export default function HomePage() {
                     e.stopPropagation();
                     handleEmailClick(email.id);
                   }}
-                  className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 hover:bg-[#1E1E1E] transition-colors cursor-pointer"
+                  className="flex items-start gap-3 px-3 sm:px-4 py-3 hover:bg-[#1E1E1E] transition-colors cursor-pointer group"
                 >
-                  {/* Status Indicator & Sender */}
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
-                    <div className={`${getStatusColor(email.threatLevel)} text-2xl`}>
-                      {getStatusIcon(email.threatLevel)}
-                    </div>
-                    <div className="flex-1 sm:w-48">
-                      <p className="font-medium">{email.from.split("<")[0].trim()}</p>
-                      <span className={`text-sm ${getStatusColor(email.threatLevel)}`}>
-                        {email.threatLevel.charAt(0).toUpperCase() + email.threatLevel.slice(1)}
-                      </span>
-                    </div>
-                    {/* Time - Mobile */}
-                    <span className="text-sm text-white sm:hidden">
-                      {formatTime(email.receivedAt)}
-                    </span>
-                  </div>
-
-                  {/* Subject & Preview */}
-                  <div className="flex-1 w-full">
-                    <p className="font-medium mb-1">{email.subject}</p>
-                    <p className="text-sm text-white line-clamp-2">
-                      {email.body.substring(0, 150)}...
-                    </p>
-                    {/* Tags */}
-                    {email.threatFlags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {email.threatFlags.map((tag, index) => (
-                          <span
-                            key={index}
-                            className={`px-2 py-1 text-xs rounded ${
-                              tag === 'Whitelisted sender' 
-                                ? 'bg-green-900/30 text-green-400' 
-                                : 'bg-red-900/30 text-red-400'
-                            }`}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Time & Actions - Desktop */}
-                  <div className="hidden sm:flex items-center gap-4">
-                    <span className="text-sm text-white">{formatTime(email.receivedAt)}</span>
+                  {/* Left Side: Star, Avatar, Status */}
+                  <div className="flex items-start gap-2 flex-shrink-0">
+                    {/* Star Icon */}
                     <button
-                      className="text-white hover:text-white"
+                      className="p-1 opacity-0 group-hover:opacity-100 transition-opacity mt-1"
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleStar(email.id);
                       }}
                     >
                       <svg
-                        className="w-5 h-5"
+                        className={`w-4 h-4 ${email.isStarred ? 'text-yellow-400 fill-yellow-400 opacity-100' : 'text-gray-500'}`}
                         fill={email.isStarred ? "currentColor" : "none"}
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -507,15 +467,112 @@ export default function HomePage() {
                         />
                       </svg>
                     </button>
+
+                    {/* Sender Avatar/Initials - Top Left */}
+                    <div className="flex-shrink-0">
+                      {(() => {
+                        const senderName = email.from.split("<")[0].trim() || email.from;
+                        const senderEmail = email.from.match(/<([^>]+)>/)?.[1] || email.from;
+                        const initials = senderName
+                          .split(' ')
+                          .filter(n => n.length > 0)
+                          .map(n => n[0])
+                          .join('')
+                          .toUpperCase()
+                          .slice(0, 2) || senderEmail.charAt(0).toUpperCase();
+                        
+                        // Generate consistent color based on sender email
+                        const colors = [
+                          'from-blue-500 to-cyan-500',
+                          'from-purple-500 to-pink-500',
+                          'from-green-500 to-emerald-500',
+                          'from-orange-500 to-red-500',
+                          'from-indigo-500 to-blue-500',
+                          'from-pink-500 to-rose-500',
+                          'from-teal-500 to-cyan-500',
+                          'from-yellow-500 to-orange-500',
+                        ];
+                        const colorIndex = senderEmail.charCodeAt(0) % colors.length;
+                        const colorClass = colors[colorIndex];
+                        
+                        return (
+                          <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${colorClass} flex items-center justify-center text-white text-xs font-medium flex-shrink-0`}>
+                            {initials}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Status Indicator - Small badge */}
+                    <div className={`${getStatusColor(email.threatLevel)} text-xs flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-2`}>
+                      {getStatusIcon(email.threatLevel)}
+                    </div>
+                  </div>
+
+                  {/* Main Content: Sender, Subject, Body */}
+                  <div className="flex-1 min-w-0">
+                    {/* Sender Name - Top */}
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-medium text-sm text-white truncate">
+                        {email.from.split("<")[0].trim() || email.from}
+                      </p>
+                      {/* Threat Flags - Inline with sender */}
+                      {email.threatFlags && email.threatFlags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {(() => {
+                            // Prioritize "Whitelisted sender" if it exists
+                            const hasWhitelisted = email.threatFlags.includes('Whitelisted sender');
+                            const flagsToShow = hasWhitelisted 
+                              ? ['Whitelisted sender', ...email.threatFlags.filter(f => f !== 'Whitelisted sender')].slice(0, 2)
+                              : email.threatFlags.slice(0, 2);
+                            
+                            return flagsToShow.map((tag, index) => (
+                              <span
+                                key={index}
+                                className={`px-1.5 py-0.5 text-xs rounded ${
+                                  tag === 'Whitelisted sender' 
+                                    ? 'bg-green-900/30 text-green-400 border border-green-800/50' 
+                                    : 'bg-red-900/30 text-red-400'
+                                }`}
+                              >
+                                {tag}
+                              </span>
+                            ));
+                          })()}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Subject - Truncated */}
+                    <div className="mb-1">
+                      <span className="font-medium text-sm text-white truncate block">
+                        {email.subject || "(No subject)"}
+                      </span>
+                    </div>
+
+                    {/* Email Body Snippet - Truncated */}
+                    <div className="mb-1">
+                      <span className="text-xs text-gray-400 line-clamp-2">
+                        {email.body.replace(/\s+/g, ' ').trim()}
+                        {email.body.length > 100 ? '...' : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right Side: Time & Actions */}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                      {formatTime(email.receivedAt)}
+                    </span>
                     <button
-                      className="text-white hover:text-white"
+                      className="p-1 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white"
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteEmail(email.id);
                       }}
                     >
                       <svg
-                        className="w-5 h-5"
+                        className="w-4 h-4"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"

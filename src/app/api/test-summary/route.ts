@@ -54,13 +54,16 @@ export async function POST() {
 
     console.log('Testing AI summary generation for email:', email.id);
 
+    // Get user from email (for testing purposes, use the email's userId)
+    const userId = email.userId;
+
     // Force rescan the email
     await scanEmail(email.id, {
       from: email.from,
       subject: email.subject,
       body: email.body,
       htmlBody: email.htmlBody || undefined,
-    });
+    }, userId);
 
     // Fetch the updated email
     const updatedEmail = await prisma.email.findUnique({
