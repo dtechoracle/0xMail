@@ -290,9 +290,10 @@ export default function HomePage() {
   return (
     <div className="bg-black min-h-screen text-white p-0 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Stats Cards - Hidden on mobile, shown on larger screens */}
-        <div className="mb-4 sm:mb-6 hidden sm:block">
-          <div className="flex overflow-x-auto gap-4 pb-2 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-x-visible">
+        {/* Stats Cards - Compact on mobile, full cards on larger screens */}
+        <div className="mb-3 sm:mb-6">
+          {/* On mobile, show as a horizontally scrollable row (Gmail-style chips) */}
+          <div className="flex overflow-x-auto gap-3 pb-2 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-x-visible">
             <div className="bg-[#151515] rounded-xl p-6 border border-[#1E1E1E] min-w-[280px] sm:min-w-0">
               <div className="flex items-center gap-2 mb-2">
                 <svg

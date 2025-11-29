@@ -771,7 +771,7 @@ export default function EmailDetailPage() {
 
           {/* Threat Analysis Sidebar - Gmail Style Compact */}
           {showAnalysis && email.analysis && (
-            <div className="hidden lg:block w-64 flex-shrink-0 space-y-4 pt-3">
+            <div className="w-full lg:w-64 flex-shrink-0 space-y-4 pt-4 lg:pt-3 mt-4 lg:mt-0">
               {/* AI Summary */}
               <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
                 <h2 className="text-sm font-semibold mb-2">AI Summary</h2>
