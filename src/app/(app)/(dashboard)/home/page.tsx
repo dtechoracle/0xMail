@@ -259,6 +259,35 @@ export default function HomePage() {
     }
   };
 
+  // Derive a sender trust score (0–100) from threat score + flags
+  const getTrustScore = (email: Email): { score: number; label: string; color: string } => {
+    const rawThreat = typeof email.threatScore === "number" ? email.threatScore : 0;
+    let score = Math.max(0, Math.min(100, 100 - rawThreat));
+
+    // Adjust based on overall threat level
+    if (email.threatLevel === "malicious") {
+      score = Math.min(score, 25);
+    } else if (email.threatLevel === "suspicious") {
+      score = Math.min(score, 60);
+    }
+
+    // If user has explicitly whitelisted this sender, strongly boost trust
+    const isWhitelisted = email.threatFlags?.includes("Whitelisted sender");
+    if (isWhitelisted) {
+      score = Math.max(score, 95);
+    }
+
+    const rounded = Math.round(score);
+
+    if (rounded >= 80) {
+      return { score: rounded, label: "High", color: "bg-green-500/10 text-green-400 border border-green-700/60" };
+    }
+    if (rounded >= 50) {
+      return { score: rounded, label: "Medium", color: "bg-yellow-500/10 text-yellow-400 border border-yellow-700/60" };
+    }
+    return { score: rounded, label: "Low", color: "bg-red-500/10 text-red-400 border border-red-700/60" };
+  };
+
   if (loading) {
     return (
       <div className="bg-black min-h-screen text-white p-4 sm:p-6">
@@ -565,6 +594,15 @@ export default function HomePage() {
                     <span className="text-[10px] sm:text-xs text-gray-400 whitespace-nowrap">
                       {formatTime(email.receivedAt)}
                     </span>
+                    {(() => {
+                      const { score, label, color } = getTrustScore(email);
+                      return (
+                        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full mt-0.5 ${color}`}>
+                          <span className="text-[9px] uppercase tracking-wide">{label}</span>
+                          <span className="text-[9px] font-semibold">{score}</span>
+                        </div>
+                      );
+                    })()}
                     <button
                       className="p-0.5 sm:p-1 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white"
                       onClick={(e) => {
