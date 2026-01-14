@@ -18,8 +18,6 @@ export default function EmailDetailPage() {
   const [bcc, setBcc] = useState("");
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [isSendingReply, setIsSendingReply] = useState(false);
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState("");
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [selectedLink, setSelectedLink] = useState("");
   const [isMarkingSafe, setIsMarkingSafe] = useState(false);
@@ -175,36 +173,8 @@ export default function EmailDetailPage() {
     }
   }
 
-  async function handleAIGenerate(prompt: string) {
-    try {
-      setIsGeneratingAI(true);
-      const response = await apiClient.generateAIReply({
-        prompt: prompt,
-        emailBody: email.body,
-        emailSubject: email.subject,
-        emailFrom: email.from,
-      });
-
-      if (response.success) {
-        setReplyBody(response.data.reply);
-        toast.success("AI reply generated successfully");
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to generate AI reply");
-    } finally {
-      setIsGeneratingAI(false);
-    }
-  }
-
   function handleReplyTextChange(text: string) {
     setReplyBody(text);
-
-    // Check if user typed "#" followed by text
-    const aiMatch = text.match(/^#(.+)$/);
-    if (aiMatch && aiMatch[1].trim().length > 3) {
-      const prompt = aiMatch[1].trim();
-      handleAIGenerate(prompt);
-    }
   }
 
   function handleLinkClick(e: React.MouseEvent, url: string) {
@@ -402,6 +372,48 @@ export default function EmailDetailPage() {
 
   const threatLevel = getThreatLevel(email.threatScore);
 
+  // Sender/domain trust score derived from threat score, level and flags
+  const getTrustScore = (emailObj: any): { score: number; label: string; description: string; color: string } => {
+    const rawThreat = typeof emailObj.threatScore === "number" ? emailObj.threatScore : 0;
+    let score = Math.max(0, Math.min(100, 100 - rawThreat));
+
+    if (emailObj.threatLevel === "malicious") {
+      score = Math.min(score, 25);
+    } else if (emailObj.threatLevel === "suspicious") {
+      score = Math.min(score, 60);
+    }
+
+    const hasWhitelistFlag = emailObj.threatFlags?.includes("Whitelisted sender");
+    if (hasWhitelistFlag || isWhitelisted) {
+      score = Math.max(score, 95);
+    }
+
+    const rounded = Math.round(score);
+
+    if (rounded >= 80) {
+      return {
+        score: rounded,
+        label: "High trust",
+        description: "We have a strong level of confidence in this sender based on current analysis.",
+        color: "bg-green-500/10 text-green-300 border border-green-700/60"
+      };
+    }
+    if (rounded >= 50) {
+      return {
+        score: rounded,
+        label: "Medium trust",
+        description: "Some signals look safe, but there are risk factors you should be aware of.",
+        color: "bg-yellow-500/10 text-yellow-300 border border-yellow-700/60"
+      };
+    }
+    return {
+      score: rounded,
+      label: "Low trust",
+      description: "Multiple risk indicators detected. Treat this sender with extra caution.",
+      color: "bg-red-500/10 text-red-300 border border-red-700/60"
+    };
+  };
+
   return (
     <div className="bg-black min-h-screen text-white">
       <div className="max-w-6xl mx-auto">
@@ -458,7 +470,7 @@ export default function EmailDetailPage() {
           </div>
         </div>
 
-        <div className={`flex gap-4 ${showAnalysis ? "lg:flex-row" : ""}`}>
+        <div className={`flex flex-col gap-4 lg:flex-row`}>
           {/* Email Content - Gmail Style */}
           <div className={`flex-1 ${showAnalysis ? "lg:max-w-3xl" : ""}`}>
             {/* Subject - Gmail Style */}
@@ -681,56 +693,14 @@ export default function EmailDetailPage() {
                     </>
                   )}
 
-                  {/* AI Helper Prompt */}
-                  <div className="mb-4 bg-blue-900/20 border border-blue-800/30 rounded-lg p-3">
-                    <div className="flex items-start gap-2">
-                      <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <div className="flex-1">
-                        <p className="text-blue-300 text-sm font-medium mb-2">AI Reply Prompt</p>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <input
-                            type="text"
-                            value={aiPrompt}
-                            onChange={(e) => setAiPrompt(e.target.value)}
-                            placeholder="Describe how the AI should reply (e.g., accept the meeting politely)"
-                            className="flex-1 bg-black border border-blue-800/50 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-400 placeholder:text-white/50"
-                          />
-                          <button
-                            onClick={() => aiPrompt.trim() && handleAIGenerate(aiPrompt.trim())}
-                            disabled={isGeneratingAI || !aiPrompt.trim()}
-                            className="px-4 py-2 rounded bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isGeneratingAI ? 'Generating...' : 'Generate'}
-                          </button>
-                        </div>
-                        <p className="text-blue-200 text-xs mt-2">
-                          Tip: You can also type <span className="font-mono bg-blue-900/40 px-1.5 py-0.5 rounded">#your prompt</span> directly in the reply box.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Reply Body - Gmail Style */}
                   <div className="mb-3">
                     <textarea
                       value={replyBody}
                       onChange={(e) => handleReplyTextChange(e.target.value)}
-                      placeholder="Type your reply or use # to generate with AI..."
-                      disabled={isGeneratingAI}
-                      className="w-full bg-transparent border border-[#1E1E1E] rounded px-3 py-2 text-white text-sm min-h-[120px] focus:outline-none focus:border-white resize-none disabled:opacity-50"
+                      placeholder="Type your reply..."
+                      className="w-full bg-transparent border border-[#1E1E1E] rounded px-3 py-2 text-white text-sm min-h-[120px] focus:outline-none focus:border-white resize-none"
                     />
-                    {isGeneratingAI && (
-                      <div className="flex items-center gap-2 mt-2 text-blue-400 text-sm">
-                        <div className="flex gap-1">
-                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
-                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
-                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
-                        </div>
-                        <span>Generating AI reply...</span>
-                      </div>
-                    )}
                   </div>
 
                   {/* Action Buttons - Gmail Style */}
@@ -738,7 +708,7 @@ export default function EmailDetailPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handleSendReply}
-                        disabled={isSendingReply || isGeneratingAI || !replyBody.trim()}
+                        disabled={isSendingReply || !replyBody.trim()}
                         className="bg-white text-black px-4 py-1.5 rounded text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isSendingReply ? (
@@ -772,6 +742,67 @@ export default function EmailDetailPage() {
           {/* Threat Analysis Sidebar - Gmail Style Compact */}
           {showAnalysis && email.analysis && (
             <div className="w-full lg:w-64 flex-shrink-0 space-y-4 pt-4 lg:pt-3 mt-4 lg:mt-0">
+              {/* Sender Trust & Risk Timeline */}
+              {(() => {
+                const { score, label, description, color } = getTrustScore(email);
+                const receivedAt = new Date(email.receivedAt);
+                const firstSeen = receivedAt.toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                });
+                const threatLabel = threatLevel.level;
+                const whitelisted = email.threatFlags?.includes("Whitelisted sender") || isWhitelisted;
+
+                return (
+                  <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
+                    <h2 className="text-sm font-semibold mb-3">Sender Trust</h2>
+                    <div className={`rounded-lg px-4 py-3 mb-3 flex items-center justify-between ${color}`}>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide opacity-80">Trust score</p>
+                        <p className="text-sm font-semibold">{label}</p>
+                      </div>
+                      <p className="text-2xl font-bold">{score}</p>
+                    </div>
+                    <p className="text-xs text-white/70 mb-3 leading-relaxed">
+                      {description}
+                    </p>
+                    <div className="space-y-2 mt-2">
+                      <p className="text-xs font-semibold text-white/80">Risk timeline</p>
+                      <div className="space-y-2 text-xs text-white/70">
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-white/60" />
+                          <div>
+                            <p className="font-medium">First seen</p>
+                            <p className="text-white/60">{firstSeen}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-white/60" />
+                          <div>
+                            <p className="font-medium">This email scanned</p>
+                            <p className="text-white/60">
+                              {threatLabel} risk • threat score {email.threatScore}/100
+                            </p>
+                          </div>
+                        </div>
+                        {whitelisted && (
+                          <div className="flex items-start gap-2">
+                            <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-green-400" />
+                            <div>
+                              <p className="font-medium">Whitelisted by you</p>
+                              <p className="text-white/60">
+                                Future emails from this sender will be treated as trusted unless new risks appear.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* AI Summary */}
               <div className="bg-[#151515] rounded-lg p-4 border border-[#1E1E1E]">
                 <h2 className="text-sm font-semibold mb-2">AI Summary</h2>
